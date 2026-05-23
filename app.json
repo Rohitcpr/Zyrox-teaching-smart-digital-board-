@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "ZYROX",
+    "slug": "zyrox",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0F",
+    "splash": {
+      "backgroundColor": "#0A0A0F"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0F"
+      },
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "scheme": "zyrox",
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
