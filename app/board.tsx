@@ -22,6 +22,7 @@ import { ImportedImageLayer } from '../src/components/canvas/ImportedImageLayer'
 import { PDFViewerLayer } from '../src/components/canvas/PDFViewerLayer';
 import { StickyNote } from '../src/components/canvas/StickyNote';
 import { useCanvasStore } from '../src/store/useCanvasStore';
+import { useRef as useRefStability } from 'react';
 import { useAppStore } from '../src/store/useAppStore';
 import { usePageStore } from '../src/store/usePageStore';
 import { useStickyStore } from '../src/store/useStickyStore';
@@ -43,6 +44,11 @@ export default function BoardScreen() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importedItems, setImportedItems] = useState<ImportedItem[]>([]);
+  const [showTimer, setShowTimer] = useState(false);
+  const [showRuler, setShowRuler] = useState(false);
+  const [showSpotlight, setShowSpotlight] = useState(false);
+  const [showProtractor, setShowProtractor] = useState(false);
+  const [showTable, setShowTable] = useState(false);
   const lastTap = useRef(0);
   const fabCloseRef = useRef<(() => void) | null>(null);
 
@@ -81,13 +87,21 @@ export default function BoardScreen() {
     setImportedItems((prev) => prev.filter((i) => i.id !== id));
   };
 
+  // Save before switching page (Block F - stability)
+  const prevPageId = useRef(currentPageId);
   useEffect(() => {
+    const prev = prevPageId.current;
+    if (prev !== currentPageId) {
+      useCanvasStore.getState().saveCanvas(prev);
+    }
+    prevPageId.current = currentPageId;
     loadPages();
     if (isNew === 'true') initCanvas();
     else loadCanvas(currentPageId);
   }, [currentPageId]);
 
   useAutoSave(currentPageId);
+  usePerformance();
 
   return (
     <View style={[styles.screen, { backgroundColor: bgColor }]}>
@@ -133,6 +147,11 @@ export default function BoardScreen() {
       <TopBar
         pageId={currentPageId}
         onImportPress={() => setShowImport(true)}
+        onTimerPress={() => setShowTimer((t) => t === false)}
+        onRulerPress={() => setShowRuler((r) => r === false)}
+        onSpotlightPress={() => setShowSpotlight((s) => s === false)}
+        onProtractorPress={() => setShowProtractor((p) => p === false)}
+        onTablePress={() => setShowTable((t) => t === false)}
         onLayerPress={() => setShowLayerPanel(true)}
       />
 
@@ -167,6 +186,11 @@ export default function BoardScreen() {
         />
       )}
 
+      {showTimer && <BoardTimer onClose={() => setShowTimer(false)} />}
+      {showRuler && <RulerTool onClose={() => setShowRuler(false)} />}
+      {showSpotlight && <SpotlightTool onClose={() => setShowSpotlight(false)} />}
+      {showProtractor && <ProtractorTool onClose={() => setShowProtractor(false)} />}
+      {showTable && <TableTool onClose={() => setShowTable(false)} />}
       <Toast message={toastMessage} visible={toastVisible} />
       <FloatingToolbar
         onToolSelect={handleCanvasTap}

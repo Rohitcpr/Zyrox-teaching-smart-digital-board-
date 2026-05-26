@@ -11,9 +11,14 @@ interface Props {
   pageId?: string;
   onImportPress?: () => void;
   onLayerPress?: () => void;
+  onTimerPress?: () => void;
+  onRulerPress?: () => void;
+  onSpotlightPress?: () => void;
+  onProtractorPress?: () => void;
+  onTablePress?: () => void;
 }
 
-export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, onLayerPress }) => {
+export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, onLayerPress, onTimerPress, onRulerPress, onSpotlightPress, onProtractorPress, onTablePress }) => {
   const router = useRouter();
   const undo = useCanvasStore((s) => s.undo);
   const redo = useCanvasStore((s) => s.redo);
@@ -31,6 +36,11 @@ export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, on
 
   const MENU_ITEMS = [
     { icon: 'trash-outline',              label: 'Clear Board',       color: '#EF4444', onPress: () => { useCanvasStore.getState().clearCanvas(); setShowMenu(false); } },
+    { icon: 'timer-outline',              label: 'Timer',             color: '#F59E0B', onPress: () => { setShowMenu(false); onTimerPress?.(); } },
+    { icon: 'ruler-outline',              label: 'Ruler',             color: '#22C55E', onPress: () => { setShowMenu(false); onRulerPress?.(); } },
+    { icon: 'radio-button-on-outline',    label: 'Protractor',        color: '#A855F7', onPress: () => { setShowMenu(false); onProtractorPress?.(); } },
+    { icon: 'flashlight-outline',         label: 'Spotlight',         color: '#FCD34D', onPress: () => { setShowMenu(false); onSpotlightPress?.(); } },
+    { icon: 'grid-outline',               label: 'Table',             color: '#3B82F6', onPress: () => { setShowMenu(false); onTablePress?.(); } },
     { icon: 'cloud-download-outline',     label: 'Import PDF/Image',  color: '#22C55E', onPress: () => { setShowMenu(false); onImportPress?.(); } },
     { icon: 'share-outline',              label: 'Export / Share',    color: '#3B82F6', onPress: () => { setShowMenu(false); setShowExport(true); } },
     { icon: 'easel-outline',              label: 'Presentation',      color: BRAND.primaryLight, onPress: () => { setShowMenu(false); router.push('/presentation'); } },
@@ -50,6 +60,9 @@ export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, on
 
         {/* Right controls */}
         <View style={styles.rightGroup}>
+          <TouchableOpacity onPress={onTimerPress} style={styles.glassBtn}>
+            <Ionicons name="timer-outline" size={18} color={TEXT.secondary} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={undo} disabled={undoStack.length === 0} style={styles.glassBtn}>
             <Ionicons name="arrow-undo" size={18} color={undoStack.length > 0 ? TEXT.secondary : TEXT.disabled} />
           </TouchableOpacity>
