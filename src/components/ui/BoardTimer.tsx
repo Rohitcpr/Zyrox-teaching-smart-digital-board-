@@ -1,154 +1,52 @@
-import React, { useRef, useState, useEffect } from "react";
-import {
-  Animated, PanResponder, View, StyleSheet,
-  TouchableOpacity, Text, useWindowDimensions,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BRAND, TEXT } from '../../constants/colors';
 
-interface Props {
-  onClose: () => void;
-}
+interface Props { onClose: () => void; }
 
 export const BoardTimer: React.FC<Props> = ({ onClose }) => {
-  const { width } = useWindowDimensions();
   const [seconds, setSeconds] = useState(300);
-  const [isRunning, setIsRunning] = useState(false);
-  const [inputMode, setInputMode] = useState(false);
-  const [customMin, setCustomMin] = useState("5");
-  const intervalRef = useRef(null);
-
-  const pan = useRef(new Animated.ValueXY({ x: width / 2 - 80, y: 100 })).current;
-  const currentPos = useRef({ x: width / 2 - 80, y: 100 });
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        pan.setOffset({ x: currentPos.current.x, y: currentPos.current.y });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
-      onPanResponderRelease: (_, gs) => {
-        pan.flattenOffset();
-        currentPos.current = {
-          x: currentPos.current.x + gs.dx,
-          y: currentPos.current.y + gs.dy,
-        };
-      },
-    })
-  ).current;
+  const [running, setRunning] = useState(false);
+  const ref = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (isRunning) {
-      intervalRef.current = setInterval(() => {
-        setSeconds((s) => {
-          if (s <= 1) {
-            setIsRunning(false);
-            clearInterval(intervalRef.current);
-            return 0;
-          }
-          return s - 1;
-        });
-      }, 1000);
+    if (running) {
+      ref.current = setInterval(() => setSeconds(s => s > 0 ? s - 1 : 0), 1000);
     } else {
-      clearInterval(intervalRef.current);
+      if (ref.current) clearInterval(ref.current);
     }
-    return () => clearInterval(intervalRef.current);
-  }, [isRunning]);
+    return () => { if (ref.current) clearInterval(ref.current); };
+  }, [running]);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return (m < 10 ? "0" + m : m) + ":" + (sec < 10 ? "0" + sec : sec);
-  };
-
-  const handleReset = () => {
-    setIsRunning(false);
-    setSeconds(300);
-  };
-
-  const handleAdd = (s: number) => {
-    setSeconds((prev) => prev + s);
-  };
-
-  const isWarning = seconds <= 30 && seconds > 0;
-  const isDone = seconds === 0;
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  const isWarning = seconds <= 30;
 
   return (
-    <Animated.View
-      style={[styles.container, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}
-      {...panResponder.panHandlers}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Ionicons name="timer-outline" size={13} color="rgba(255,255,255,0.6)" />
-        <Text style={styles.headerText}>TIMER</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-          <Ionicons name="close" size={13} color="rgba(255,255,255,0.6)" />
+    <View style={[styles.box, isWarning && { borderColor: '#EF4444' }]}>
+      <Text style={[styles.time, isWarning && { color: '#EF4444' }]}>{mm}:{ss}</Text>
+      <View style={styles.row}>
+        <TouchableOpacity onPress={() => setSeconds(s => s + 60)} style={styles.btn}><Text style={styles.btnTxt}>+1m</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setSeconds(s => s + 300)} style={styles.btn}><Text style={styles.btnTxt}>+5m</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setRunning(r => !r)} style={[styles.btn, { backgroundColor: BRAND.primary }]}>
+          <Ionicons name={running ? 'pause' : 'play'} size={14} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { setRunning(false); setSeconds(300); }} style={styles.btn}>
+          <Ionicons name="refresh" size={14} color={TEXT.secondary} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onClose} style={styles.btn}>
+          <Ionicons name="close" size={14} color={TEXT.secondary} />
         </TouchableOpacity>
       </View>
-
-      {/* Time Display */}
-      <Text style={[styles.timeText, isWarning && styles.timeWarning, isDone && styles.timeDone]}>
-        {formatTime(seconds)}
-      </Text>
-
-      {isDone && (
-        <Text style={styles.doneText}>Time Up!</Text>
-      )}
-
-      {/* Quick add buttons */}
-      <View style={styles.quickRow}>
-        {[1, 5, 10].map((m) => (
-          <TouchableOpacity key={m} onPress={() => handleAdd(m * 60)} style={styles.quickBtn}>
-            <Text style={styles.quickText}>+{m}m</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity onPress={handleReset} style={styles.ctrlBtn}>
-          <Ionicons name="refresh" size={16} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setIsRunning((r) => r === false)}
-          style={[styles.playBtn, isRunning && styles.pauseBtn]}
-        >
-          <Ionicons name={isRunning ? "pause" : "play"} size={20} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSeconds((s) => Math.max(0, s - 60))} style={styles.ctrlBtn}>
-          <Ionicons name="remove" size={16} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    position: "absolute", zIndex: 100,
-    backgroundColor: "rgba(15,15,30,0.95)",
-    borderRadius: 16, padding: 16, width: 180,
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.4)",
-    alignItems: "center", gap: 10,
-  },
-  header: { flexDirection: "row", alignItems: "center", gap: 6, width: "100%" },
-  headerText: { flex: 1, fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: "700", letterSpacing: 1 },
-  closeBtn: { padding: 2 },
-  timeText: { fontSize: 42, fontWeight: "800", color: "#fff", letterSpacing: 2 },
-  timeWarning: { color: "#F59E0B" },
-  timeDone: { color: "#EF4444" },
-  doneText: { fontSize: 11, color: "#EF4444", fontWeight: "700" },
-  quickRow: { flexDirection: "row", gap: 6 },
-  quickBtn: { backgroundColor: "rgba(124,58,237,0.3)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  quickText: { fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: "600" },
-  controls: { flexDirection: "row", alignItems: "center", gap: 10 },
-  ctrlBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" },
-  playBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(124,58,237,0.9)", alignItems: "center", justifyContent: "center" },
-  pauseBtn: { backgroundColor: "rgba(239,68,68,0.9)" },
+  box: { position: 'absolute', top: 55, right: 10, backgroundColor: 'rgba(10,10,20,0.92)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(124,58,237,0.40)', padding: 12, zIndex: 200, alignItems: 'center', gap: 8 },
+  time: { fontSize: 28, fontWeight: '800', color: '#F0F0FF', letterSpacing: 2 },
+  row: { flexDirection: 'row', gap: 6 },
+  btn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
+  btnTxt: { color: TEXT.secondary, fontSize: 11, fontWeight: '700' },
 });

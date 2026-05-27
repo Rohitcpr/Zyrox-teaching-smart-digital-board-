@@ -37,8 +37,8 @@ export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, on
   const MENU_ITEMS = [
     { icon: 'trash-outline',              label: 'Clear Board',       color: '#EF4444', onPress: () => { useCanvasStore.getState().clearCanvas(); setShowMenu(false); } },
     { icon: 'timer-outline',              label: 'Timer',             color: '#F59E0B', onPress: () => { setShowMenu(false); onTimerPress?.(); } },
-    { icon: 'ruler-outline',              label: 'Ruler',             color: '#22C55E', onPress: () => { setShowMenu(false); onRulerPress?.(); } },
-    { icon: 'radio-button-on-outline',    label: 'Protractor',        color: '#A855F7', onPress: () => { setShowMenu(false); onProtractorPress?.(); } },
+    { icon: 'resize-outline',              label: 'Ruler',             color: '#22C55E', onPress: () => { setShowMenu(false); onRulerPress?.(); } },
+    { icon: 'ellipse-outline',    label: 'Protractor',        color: '#A855F7', onPress: () => { setShowMenu(false); onProtractorPress?.(); } },
     { icon: 'flashlight-outline',         label: 'Spotlight',         color: '#FCD34D', onPress: () => { setShowMenu(false); onSpotlightPress?.(); } },
     { icon: 'grid-outline',               label: 'Table',             color: '#3B82F6', onPress: () => { setShowMenu(false); onTablePress?.(); } },
     { icon: 'cloud-download-outline',     label: 'Import PDF/Image',  color: '#22C55E', onPress: () => { setShowMenu(false); onImportPress?.(); } },

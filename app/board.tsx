@@ -22,7 +22,6 @@ import { ImportedImageLayer } from '../src/components/canvas/ImportedImageLayer'
 import { PDFViewerLayer } from '../src/components/canvas/PDFViewerLayer';
 import { StickyNote } from '../src/components/canvas/StickyNote';
 import { useCanvasStore } from '../src/store/useCanvasStore';
-import { useRef as useRefStability } from 'react';
 import { useAppStore } from '../src/store/useAppStore';
 import { usePageStore } from '../src/store/usePageStore';
 import { useStickyStore } from '../src/store/useStickyStore';
@@ -102,6 +101,7 @@ export default function BoardScreen() {
 
   useAutoSave(currentPageId);
   usePerformance();
+  
 
   return (
     <View style={[styles.screen, { backgroundColor: bgColor }]}>
@@ -174,6 +174,11 @@ export default function BoardScreen() {
         />
       )}
       {showLayerPanel && <LayerPanel onClose={() => setShowLayerPanel(false)} />}
+      {showTimer && <BoardTimer onClose={() => setShowTimer(false)} />}
+      {showRuler && <RulerTool onClose={() => setShowRuler(false)} />}
+      {showSpotlight && <SpotlightTool onClose={() => setShowSpotlight(false)} />}
+      {showProtractor && <ProtractorTool onClose={() => setShowProtractor(false)} />}
+      {showTable && <TableTool onClose={() => setShowTable(false)} />}
       {showImport && (
         <ImportPanel
           onClose={() => setShowImport(false)}
