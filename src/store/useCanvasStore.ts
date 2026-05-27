@@ -86,6 +86,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set((st) => ({ shapes: [...st.shapes, newShape], activeShapeStart: null, activeShapeEnd: null, isDirty: true }));
   },
 
+  updateTextItem: (id, changes) => {
+    set((s) => ({
+      textItems: s.textItems.map((t) => t.id === id ? { ...t, ...changes } : t),
+    }));
+  },
+  deleteTextItem: (id) => {
+    set((s) => ({ textItems: s.textItems.filter((t) => t.id !== id) }));
+  },
   addTextItem: (item) => {
     const newItem: TextItem = { id: generateId(), ...item };
     set((s) => ({ textItems: [...s.textItems, newItem], isDirty: true }));

@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { G, Text as SvgText } from 'react-native-svg';
+import React, { memo } from "react";
+import { G, Text as SvgText } from "react-native-svg";
 
 export interface TextItem {
   id: string;
@@ -9,13 +9,16 @@ export interface TextItem {
   color: string;
   fontSize: number;
   opacity: number;
+  fontWeight?: string;
+  fontStyle?: string;
 }
 
 interface Props {
   items: TextItem[];
+  onTap?: (item: TextItem) => void;
 }
 
-export const TextRenderer: React.FC<Props> = memo(({ items }) => (
+export const TextRenderer: React.FC<Props> = memo(({ items, onTap }) => (
   <G>
     {items.map((item) => (
       <SvgText
@@ -25,7 +28,9 @@ export const TextRenderer: React.FC<Props> = memo(({ items }) => (
         fill={item.color}
         fontSize={item.fontSize}
         fillOpacity={item.opacity}
-        fontWeight="500"
+        fontWeight={item.fontWeight ?? "500"}
+        fontStyle={item.fontStyle ?? "normal"}
+        onPress={() => onTap?.(item)}
       >
         {item.text}
       </SvgText>
@@ -33,4 +38,4 @@ export const TextRenderer: React.FC<Props> = memo(({ items }) => (
   </G>
 ));
 
-TextRenderer.displayName = 'TextRenderer';
+TextRenderer.displayName = "TextRenderer";
