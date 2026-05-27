@@ -81,13 +81,15 @@ export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, on
       {showMenu && (
         <>
           <TouchableOpacity style={styles.backdrop} onPress={() => setShowMenu(false)} />
-          <ScrollView style={styles.dropdown} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps='handled'>
-            {MENU_ITEMS.map((item) => (
-              <TouchableOpacity key={item.label} onPress={item.onPress} style={styles.dropItem}>
-                <Ionicons name={item.icon as any} size={16} color={item.color} />
-                <Text style={styles.dropLabel}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.dropdown}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+              {MENU_ITEMS.map((item) => (
+                <TouchableOpacity key={item.label} onPress={item.onPress} style={styles.dropItem}>
+                  <Ionicons name={item.icon as any} size={16} color={item.color} />
+                  <Text style={styles.dropLabel}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         </>
       )}
@@ -117,11 +119,10 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, zIndex: 98 },
   dropdown: {
     position: 'absolute', top: 54, right: 10,
-    maxHeight: 400,
     backgroundColor: 'rgba(15,15,26,0.97)',
     borderRadius: 14, borderWidth: 1,
     borderColor: 'rgba(124,58,237,0.25)',
-    zIndex: 99, minWidth: 210, overflow: 'hidden',
+    zIndex: 99, minWidth: 210, overflow: 'hidden', maxHeight: 420,
   },
   dropItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
