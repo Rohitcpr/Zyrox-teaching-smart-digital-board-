@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCanvasStore } from '../../store/useCanvasStore';
@@ -81,7 +81,7 @@ export const TopBar: React.FC<Props> = ({ pageId = 'page_001', onImportPress, on
       {showMenu && (
         <>
           <TouchableOpacity style={styles.backdrop} onPress={() => setShowMenu(false)} />
-          <View style={styles.dropdown}>
+          <ScrollView style={styles.dropdown} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps='handled'>
             {MENU_ITEMS.map((item) => (
               <TouchableOpacity key={item.label} onPress={item.onPress} style={styles.dropItem}>
                 <Ionicons name={item.icon as any} size={16} color={item.color} />
@@ -117,6 +117,7 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, zIndex: 98 },
   dropdown: {
     position: 'absolute', top: 54, right: 10,
+    maxHeight: 400,
     backgroundColor: 'rgba(15,15,26,0.97)',
     borderRadius: 14, borderWidth: 1,
     borderColor: 'rgba(124,58,237,0.25)',

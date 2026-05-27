@@ -75,6 +75,13 @@ export const FloatingToolbar: React.FC<Props> = ({ onToolSelect, onCloseRef, onL
   return (
     <Animated.View style={[styles.wrapper, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}>
       {isOpen && (
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={closeMenu}
+        />
+      )}
+      {isOpen && (
         <Animated.View style={[styles.menu, menuPosition, { width: menuWidth, opacity: fadeAnim, transform: [{ scale: fadeAnim.interpolate({ inputRange: [0,1], outputRange: [0.92,1] }) }] }]}>
           <Text style={styles.sectionLabel}>TOOLS</Text>
           <View style={styles.row}>
@@ -161,5 +168,13 @@ const styles = StyleSheet.create({
   activeChip: { backgroundColor: 'rgba(124,58,237,0.18)', borderColor: 'rgba(124,58,237,0.55)' },
   chipLabel: { fontSize: 10, fontWeight: '600', color: TEXT.secondary },
   colorDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)' },
+  backdrop: {
+    position: 'absolute',
+    top: -2000,
+    left: -2000,
+    right: -2000,
+    bottom: -2000,
+    zIndex: 0,
+  },
   fab: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, elevation: 10 },
 });
