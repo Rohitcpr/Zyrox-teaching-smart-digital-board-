@@ -8,10 +8,11 @@ import { Ionicons } from "@expo/vector-icons";
 interface Props {
   uri: string;
   name?: string;
+  interactive?: boolean;
   onRemove: () => void;
 }
 
-export const ImportedImageLayer: React.FC<Props> = ({ uri, name, onRemove }) => {
+export const ImportedImageLayer: React.FC<Props> = ({ uri, name, onRemove, interactive = false }) => {
   const { width, height } = useWindowDimensions();
   const [showControls, setShowControls] = useState(true);
   const [, forceUpdate] = useState(0);
@@ -82,8 +83,8 @@ export const ImportedImageLayer: React.FC<Props> = ({ uri, name, onRemove }) => 
 
   return (
     <Animated.View
-      style={[styles.container, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}
-      {...panResponder.panHandlers}
+      style={[styles.container, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }, (!interactive ? { pointerEvents: 'none' } : {})]}
+      {...(interactive ? panResponder.panHandlers : {})}
     >
       <TouchableOpacity activeOpacity={1} onPress={() => setShowControls((s) => s === false)}>
         <Image

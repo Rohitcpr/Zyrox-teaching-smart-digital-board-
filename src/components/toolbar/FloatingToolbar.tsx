@@ -18,6 +18,7 @@ const TOOLS: { id: ToolType; icon: string; label: string; color: string }[] = [
   { id: 'stroke_eraser',icon: 'cut',           label: 'S.Erase',  color: '#EF4444' },
   { id: 'text',         icon: 'text',          label: 'Text',     color: '#22C55E' },
   { id: 'select',       icon: 'scan-outline',  label: 'Select',   color: '#F97316' },
+  { id: 'laser',        icon: 'radio-button-on', label: 'Laser',   color: '#EF4444' },
 ];
 
 type SubPanel = 'none'|'color'|'size'|'opacity'|'grid'|'shape'|'bg';
@@ -98,7 +99,7 @@ export const FloatingToolbar: React.FC<Props> = ({ onToolSelect, onCloseRef, onL
 
           <Text style={styles.sectionLabel}>SETTINGS</Text>
           <View style={styles.row}>
-            <TouchableOpacity onPress={() => handleSub('color', toggleColorPalette)} style={[styles.chip, subPanel === 'color' && styles.activeChip]}>
+            <TouchableOpacity onPress={() => handleSub('color', toggleColorPalette)} style={[styles.chip, subPanel === 'color' && { backgroundColor: '#A855F728', borderColor: '#A855F7' }]}>
               <View style={[styles.colorDot, { backgroundColor: color }]} />
               <Text style={styles.chipLabel}>Color</Text>
             </TouchableOpacity>

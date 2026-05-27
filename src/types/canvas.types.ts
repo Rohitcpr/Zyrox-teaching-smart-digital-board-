@@ -13,7 +13,8 @@ export type ToolType =
   | 'stroke_eraser'
   | 'shape'
   | 'text'
-  | 'select';
+  | 'select'
+  | 'laser';
 
 export interface Stroke {
   id: string;

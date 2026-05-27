@@ -22,6 +22,7 @@ import { ImportedImageLayer } from '../src/components/canvas/ImportedImageLayer'
 import { PDFViewerLayer } from '../src/components/canvas/PDFViewerLayer';
 import { StickyNote } from '../src/components/canvas/StickyNote';
 import { useCanvasStore } from '../src/store/useCanvasStore';
+import { useToolStore } from '../src/store/useToolStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { usePageStore } from '../src/store/usePageStore';
 import { useStickyStore } from '../src/store/useStickyStore';
@@ -57,6 +58,7 @@ export default function BoardScreen() {
   const fabCloseRef = useRef<(() => void) | null>(null);
 
   const loadCanvas = useCanvasStore((s) => s.loadCanvas);
+  const currentTool = useToolStore((s) => s.tool);
   const initCanvas = useCanvasStore((s) => s.initCanvas);
   const isColorPaletteOpen = useAppStore((s) => s.isColorPaletteOpen);
   const isSizeSliderOpen = useAppStore((s) => s.isSizeSliderOpen);
@@ -121,6 +123,7 @@ export default function BoardScreen() {
               key={item.id}
               uri={item.uri}
               name={item.name}
+              interactive={currentTool === 'select'}
               onRemove={() => handleRemoveItem(item.id)}
             />
           ))}
@@ -133,6 +136,7 @@ export default function BoardScreen() {
               key={item.id}
               uri={item.uri}
               name={item.name}
+              interactive={currentTool === 'select'}
               onRemove={() => handleRemoveItem(item.id)}
             />
           ))}

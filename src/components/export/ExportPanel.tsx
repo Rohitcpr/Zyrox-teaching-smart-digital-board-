@@ -8,7 +8,7 @@ import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
 import * as MediaLibrary from "expo-media-library";
 import * as Print from "expo-print";
-import * as FileSystem from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system";
 import Svg from "react-native-svg";
 import { GlassPanel } from "../ui/GlassPanel";
 import { StrokeRenderer } from "../canvas/StrokeRenderer";

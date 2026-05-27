@@ -184,10 +184,14 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = "#0A0A0F" }) =
 
   return (
     <View style={[styles.canvas, { backgroundColor: bgColor }]} {...panResponder.panHandlers}>
-      <Svg style={StyleSheet.absoluteFill}>
+      {/* Static layer - only re-renders when strokes/shapes/text change */}
+      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
         <ShapeRenderer shapes={shapes} />
         <TextRenderer items={textItems} onTap={(item) => setSelectedTextItem(item)} />
         <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
+      </Svg>
+      {/* Active layer - re-renders on every touch move */}
+      <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
         <ActiveStroke
           points={activeStrokePoints}
           color={color}
@@ -210,6 +214,7 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = "#0A0A0F" }) =
         )}
         <SelectionOverlay box={selectionBox} isSelecting={isSelecting} />
       </Svg>
+      {/* End active layer */}
 
       {showSelectionMenu && selectionBox && selectedItems.strokeIds.length > 0 && (
         <SelectionMenu
