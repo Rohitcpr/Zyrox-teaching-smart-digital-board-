@@ -100,7 +100,6 @@ export default function BoardScreen() {
   }, [currentPageId]);
 
   useAutoSave(currentPageId);
-  usePerformance();
   
 
   return (
