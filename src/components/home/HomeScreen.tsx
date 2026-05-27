@@ -9,6 +9,7 @@ import { useRouter } from "expo-router";
 import { BRAND, TEXT } from "../../constants/colors";
 import { generateId } from "../../utils/strokeUtils";
 import { useNotebookStore } from "../../store/useNotebookStore";
+import { CrossImportPanel } from "../import/CrossImportPanel";
 import { useCanvasStore } from "../../store/useCanvasStore";
 
 const { width } = Dimensions.get("window");
@@ -42,6 +43,7 @@ export const HomeScreen: React.FC = () => {
   const [selectedNotebookId, setSelectedNotebookId] = useState("");
 
   const [expandedNotebook, setExpandedNotebook] = useState<string | null>(null);
+  const [showCrossImport, setShowCrossImport] = useState(false);
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const cardsAnim  = useRef(new Animated.Value(0)).current;
@@ -93,6 +95,7 @@ export const HomeScreen: React.FC = () => {
     { icon: "time-outline",  label: "Continue",     sub: "Last board",    color: "#3B82F6", bg: "rgba(59,130,246,0.12)", onPress: () => router.push({ pathname: "/board", params: { pageId: "page_001" } }) },
     { icon: "document-text", label: "Import PDF",   sub: "Annotate",      color: "#EF4444", bg: "rgba(239,68,68,0.12)",  onPress: openNewBoard },
     { icon: "image-outline", label: "Import Image", sub: "Draw over",     color: "#22C55E", bg: "rgba(34,197,94,0.12)",  onPress: openNewBoard },
+    { icon: "git-merge-outline", label: "Cross Import", sub: "Move between notebooks", color: "#A855F7", bg: "rgba(168,85,247,0.12)", onPress: () => setShowCrossImport(true) },
   ];
 
   return (
@@ -347,6 +350,7 @@ export const HomeScreen: React.FC = () => {
         )}
       </ScrollView>
 
+      {showCrossImport && <CrossImportPanel onClose={() => setShowCrossImport(false)} />}
       {/* New Notebook Modal */}
       <Modal visible={showNewNotebook} transparent animationType="fade">
         <View style={styles.modalOverlay}>
