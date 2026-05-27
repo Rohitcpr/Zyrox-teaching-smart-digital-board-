@@ -27,6 +27,11 @@ import { usePageStore } from '../src/store/usePageStore';
 import { useStickyStore } from '../src/store/useStickyStore';
 import { useAutoSave } from '../src/hooks/useAutoSave';
 import { useZoomPan } from '../src/hooks/useZoomPan';
+import { BoardTimer } from '../src/components/ui/BoardTimer';
+import { RulerTool } from '../src/components/ui/RulerTool';
+import { SpotlightTool } from '../src/components/ui/SpotlightTool';
+import { ProtractorTool } from '../src/components/ui/ProtractorTool';
+import { TableTool } from '../src/components/ui/TableTool';
 
 interface ImportedItem {
   id: string;
