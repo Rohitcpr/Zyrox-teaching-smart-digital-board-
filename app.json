@@ -19,7 +19,8 @@
     },
     "scheme": "zyrox",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-font"
     ],
     "extra": {
       "router": {},
