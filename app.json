@@ -14,11 +14,18 @@
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0F"
       },
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "package": "com.rohitcpr.zyrox"
     },
     "scheme": "zyrox",
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d956dd72-5989-4e1b-acca-0c9c4f0a8951"
+      }
+    }
   }
 }
