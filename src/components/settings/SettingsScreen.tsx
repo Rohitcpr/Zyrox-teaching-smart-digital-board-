@@ -1,30 +1,18 @@
 import React, { useState } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Switch, Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Alert } from 'react-native';
+import { Ionicons } from '@expo/vent-icons';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../store/useAppStore';
 import { useCanvasStore } from '../../store/useCanvasStore';
-import { useFabSettings } from '../../hooks/useFabSettings';
 import { BRAND, SURFACE, TEXT, GLASS } from '../../constants/colors';
 
 export const SettingsScreen: React.FC = () => {
   const router = useRouter();
   const { settings, updateSettings } = useAppStore();
   const { clearCanvas } = useCanvasStore();
-  const { fabSize, fabOpacity, setFabSize, setFabOpacity } = useFabSettings();
-
-  const FAB_SIZES = [36, 44, 52, 60, 70];
-  const OPACITY_LEVELS = [0.3, 0.5, 0.7, 0.85, 1.0];
-
-  const handleClearAll = () => {
-    Alert.alert('Clear All Data', 'This will delete all boards. Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Clear All', style: 'destructive', onPress: () => clearCanvas() },
-    ]);
-  };
+  const [autoSave, setAutoSave] = useState(true);
+  const [palmReject, setPalmReject] = useState(true);
+  const [perfMode, setPerfMode] = useState(false);
 
   const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <View style={styles.section}>
@@ -33,14 +21,7 @@ export const SettingsScreen: React.FC = () => {
     </View>
   );
 
-  const Row: React.FC<{
-    icon: string;
-    label: string;
-    sub?: string;
-    right?: React.ReactNode;
-    onPress?: () => void;
-    color?: string;
-  }> = ({ icon, label, sub, right, onPress, color }) => (
+  const Row: React.FC<{ icon: string; label: string; sub?: string; right?: React.ReactNode; onPress?: () => void; color?: string }> = ({ icon, label, sub, right, onPress, color }) => (
     <TouchableOpacity style={styles.row} onPress={onPress} disabled={!onPress}>
       <View style={[styles.rowIcon, { backgroundColor: (color ?? BRAND.primary) + '20' }]}>
         <Ionicons name={icon as any} size={18} color={color ?? BRAND.primaryLight} />
@@ -55,7 +36,6 @@ export const SettingsScreen: React.FC = () => {
 
   return (
     <View style={styles.screen}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color={TEXT.secondary} />
@@ -66,136 +46,75 @@ export const SettingsScreen: React.FC = () => {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-        {/* Canvas Settings */}
         <Section title="CANVAS">
-          <Row
-            icon="moon-outline"
-            label="Auto Save"
-            sub="Save every 30 seconds"
-            right={
-              <Switch
-                value={settings.autoSave}
-                onValueChange={(v) => updateSettings({ autoSave: v })}
-                trackColor={{ true: BRAND.primary }}
-                thumbColor="#fff"
-              />
-            }
-          />
+          <Row icon="moon-outline" label="Auto Save" sub="Save every 30 seconds"
+            right={<Switch value={autoSave} onValueChange={setAutoSave} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />} />
           <View style={styles.divider} />
-          <Row
-            icon="grid-outline"
-            label="Default Grid"
-            sub="Set default grid type"
-            onPress={() => {}}
-          />
-          <View style={styles.divider} />
-          <Row
-            icon="hand-left-outline"
-            label="Palm Rejection"
-            sub="Ignore palm touches"
-            right={<Switch value={true} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />}
-          />
+          <Row icon="hand-left-outline" label="Palm Rejection" sub="Ignore palm touches"
+            right={<Switch value={palmReject} onValueChange={setPalmReject} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />} />
         </Section>
 
-        {/* FAB Button Settings */}
-        <Section title="FLOATING BUTTON">
-          <Text style={styles.subLabel}>Button Size</Text>
-          <View style={styles.chipRow}>
-            {FAB_SIZES.map((s) => (
-              <TouchableOpacity
-                key={s}
-                onPress={() => setFabSize(s)}
-                style={[styles.chip, fabSize === s && styles.activeChip]}
-              >
-                <View style={[styles.sizeDot, {
-                  width: s * 0.4, height: s * 0.4,
-                  borderRadius: s * 0.2,
-                  backgroundColor: fabSize === s ? BRAND.primaryLight : TEXT.secondary,
-                }]} />
-                <Text style={[styles.chipLabel, fabSize === s && { color: BRAND.primaryLight }]}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.subLabel}>Button Transparency</Text>
-          <View style={styles.chipRow}>
-            {OPACITY_LEVELS.map((o) => (
-              <TouchableOpacity
-                key={o}
-                onPress={() => setFabOpacity(o)}
-                style={[styles.chip, fabOpacity === o && styles.activeChip]}
-              >
-                <View style={[styles.opacityDot, { opacity: o }]} />
-                <Text style={[styles.chipLabel, fabOpacity === o && { color: BRAND.primaryLight }]}>
-                  {Math.round(o * 100)}%
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Section>
-
-        {/* Performance */}
         <Section title="PERFORMANCE">
-          <Row
-            icon="speedometer-outline"
-            label="Performance Mode"
-            sub="Reduce animations for speed"
-            right={<Switch value={false} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />}
-          />
+          <Row icon="speedometer-outline" label="Performance Mode" sub="Faster rendering"
+            right={<Switch value={perfMode} onValueChange={setPerfMode} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />} />
           <View style={styles.divider} />
-          <Row
-            icon="battery-half-outline"
-            label="Battery Saver"
-            sub="Reduce background activity"
-            right={<Switch value={false} trackColor={{ true: BRAND.primary }} thumbColor="#fff" />}
-          />
+          <Row icon="trash-outline" label="Clear All Data" sub="Delete all boards" color="#EF4444"
+            onPress={() => Alert.alert('Clear All', 'Delete everything?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear', style: 'destructive', onPress: clearCanvas },
+            ])} />
         </Section>
 
-        {/* Gestures */}
-        <Section title="GESTURES">
-          <Row icon="hand-right-outline" label="Two-finger Undo" sub="Swipe with 2 fingers" />
+        <Section title="FUTURE (Coming Soon)">
+          <Row icon="cloud-outline" label="Cloud Sync" sub="Disabled" color="#6B7280" />
           <View style={styles.divider} />
-          <Row icon="hand-right-outline" label="Three-finger Redo" sub="Swipe with 3 fingers" />
+          <Row icon="people-outline" label="Online Class" sub="Disabled" color="#6B7280" />
           <View style={styles.divider} />
-          <Row icon="resize-outline" label="Pinch to Zoom" sub="Zoom in/out canvas" />
-          <View style={styles.divider} />
-          <Row icon="finger-print-outline" label="Double-tap Reset" sub="Reset zoom level" />
+          <Row icon="sparkles-outline" label="AI Assistant" sub="Disabled" color="#6B7280" />
         </Section>
 
-        {/* Storage */}
-        <Section title="STORAGE">
-          <Row
-            icon="folder-outline"
-            label="Export Location"
-            sub="zyrox_exports/"
-            onPress={() => {}}
-          />
-          <View style={styles.divider} />
-          <Row
-            icon="trash-outline"
-            label="Clear All Data"
-            sub="Delete all boards"
-            color="#EF4444"
-            onPress={handleClearAll}
-          />
-        </Section>
-
-        {/* Future Modules */}
-        <Section title="FUTURE FEATURES (Coming Soon)">
-          <Row icon="cloud-outline" label="Cloud Sync" sub="Disabled — Coming soon" color="#6B7280" />
-          <View style={styles.divider} />
-          <Row icon="people-outline" label="Online Class" sub="Disabled — Coming soon" color="#6B7280" />
-          <View style={styles.divider} />
-          <Row icon="sparkles-outline" label="AI Assistant" sub="Disabled — Coming soon" color="#6B7280" />
-        </Section>
-
-        {/* About */}
+        {/* ABOUT SECTION */}
         <Section title="ABOUT">
-          <Row icon="information-circle-outline" label="ZYROX" sub="Smart Teaching Board v1.0" />
-          <View style={styles.divider} />
-          <Row icon="code-slash-outline" label="Built with" sub="React Native + Expo" />
+          <View style={styles.aboutCard}>
+            <View style={styles.aboutLogoRow}>
+              <View style={styles.aboutLogoDot} />
+              <Text style={styles.aboutLogo}>ZYROX</Text>
+            </View>
+            <Text style={styles.aboutTagline}>Smart Teaching Board OS</Text>
+            <Text style={styles.aboutVersion}>Version 1.0.0</Text>
+
+            <View style={styles.aboutDivider} />
+
+            <View style={styles.aboutRow}>
+              <Ionicons name="person-outline" size={14} color={BRAND.primaryLight} />
+              <Text style={styles.aboutLabel}>Developer</Text>
+              <Text style={styles.aboutValue}>Rohit</Text>
+            </View>
+
+            <View style={styles.aboutRow}>
+              <Ionicons name="code-slash-outline" size={14} color="#22C55E" />
+              <Text style={styles.aboutLabel}>Built with</Text>
+              <Text style={styles.aboutValue}>React Native + Expo</Text>
+            </View>
+
+            <View style={styles.aboutRow}>
+              <Ionicons name="logo-github" size={14} color={TEXT.secondary} />
+              <Text style={styles.aboutLabel}>GitHub</Text>
+              <Text style={styles.aboutValue}>Rohitcpr/Zyrox</Text>
+            </View>
+
+            <View style={styles.aboutRow}>
+              <Ionicons name="heart-outline" size={14} color="#EF4444" />
+              <Text style={styles.aboutLabel}>Made with</Text>
+              <Text style={styles.aboutValue}>❤️ for Teachers</Text>
+            </View>
+
+            <View style={styles.aboutDivider} />
+
+            <Text style={styles.aboutDesc}>
+              ZYROX is a premium futuristic Smart Teaching Board designed for teachers, students, and educators. Built completely in Termux on Android. 🚀
+            </Text>
+          </View>
         </Section>
 
       </ScrollView>
@@ -204,44 +123,28 @@ export const SettingsScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: SURFACE.bg },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingTop: 50, paddingBottom: 16, paddingHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(124,58,237,0.20)',
-  },
+  screen: { flex: 1, backgroundColor: '#080810' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 50, paddingBottom: 16, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(124,58,237,0.20)' },
   backBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   title: { fontSize: 16, fontWeight: '800', color: '#F0F0FF', letterSpacing: 2 },
   section: { paddingHorizontal: 16, marginTop: 24 },
   sectionTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 2, color: TEXT.disabled, marginBottom: 10 },
-  sectionCard: {
-    backgroundColor: GLASS.background,
-    borderRadius: 16, borderWidth: 1, borderColor: GLASS.border,
-    overflow: 'hidden',
-  },
-  row: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, gap: 12,
-  },
-  rowIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  sectionCard: { backgroundColor: GLASS.background, borderRadius: 16, borderWidth: 1, borderColor: GLASS.border, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
+  rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   rowInfo: { flex: 1 },
   rowLabel: { fontSize: 13, fontWeight: '600', color: TEXT.primary },
   rowSub: { fontSize: 11, color: TEXT.disabled, marginTop: 2 },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginLeft: 62 },
-  subLabel: { fontSize: 11, color: TEXT.secondary, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
-  chipRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 12, flexWrap: 'wrap' },
-  chip: {
-    alignItems: 'center', gap: 4, padding: 10,
-    borderRadius: 10, borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    minWidth: 52,
-  },
-  activeChip: { backgroundColor: 'rgba(124,58,237,0.18)', borderColor: 'rgba(124,58,237,0.50)' },
-  chipLabel: { fontSize: 10, color: TEXT.secondary, fontWeight: '600' },
-  sizeDot: {},
-  opacityDot: { width: 20, height: 20, borderRadius: 10, backgroundColor: BRAND.primaryLight },
+  aboutCard: { backgroundColor: GLASS.background, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(124,58,237,0.25)', padding: 20, gap: 12 },
+  aboutLogoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aboutLogoDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BRAND.primaryLight },
+  aboutLogo: { fontSize: 22, fontWeight: '900', letterSpacing: 6, color: '#F0F0FF' },
+  aboutTagline: { fontSize: 12, color: TEXT.secondary, letterSpacing: 2 },
+  aboutVersion: { fontSize: 11, color: TEXT.disabled },
+  aboutDivider: { height: 1, backgroundColor: 'rgba(124,58,237,0.20)' },
+  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  aboutLabel: { fontSize: 12, color: TEXT.disabled, flex: 1 },
+  aboutValue: { fontSize: 12, fontWeight: '600', color: TEXT.primary },
+  aboutDesc: { fontSize: 12, color: TEXT.secondary, lineHeight: 18 },
 });
