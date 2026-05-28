@@ -7,7 +7,7 @@ interface Props { onClose: () => void; }
 
 export const BoardTimer: React.FC<Props> = ({ onClose }) => {
   const [seconds, setSeconds] = useState(300);
-  const [running, setRunning] = useState(false);
+  const [isRunning, setRunning] = useState(false);
   const ref = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -19,6 +19,11 @@ export const BoardTimer: React.FC<Props> = ({ onClose }) => {
     return () => { if (ref.current) clearInterval(ref.current); };
   }, [running]);
 
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return (m < 10 ? "0" + m : m) + ":" + (sec < 10 ? "0" + sec : sec);
+  };
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
   const isWarning = seconds <= 30;
@@ -29,10 +34,10 @@ export const BoardTimer: React.FC<Props> = ({ onClose }) => {
       <View style={styles.row}>
         <TouchableOpacity onPress={() => setSeconds(s => s + 60)} style={styles.btn}><Text style={styles.btnTxt}>+1m</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setSeconds(s => s + 300)} style={styles.btn}><Text style={styles.btnTxt}>+5m</Text></TouchableOpacity>
-        <TouchableOpacity onPress={() => setRunning(r => !r)} style={[styles.btn, { backgroundColor: BRAND.primary }]}>
-          <Ionicons name={running ? 'pause' : 'play'} size={14} color="#fff" />
+        <TouchableOpacity onPress={() => setIsRunning(r => !r)} style={[styles.btn, { backgroundColor: BRAND.primary }]}>
+          <Ionicons name={isRunning ? 'pause' : 'play'} size={14} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { setRunning(false); setSeconds(300); }} style={styles.btn}>
+        <TouchableOpacity onPress={() => { setIsRunning(false); setSeconds(300); }} style={styles.btn}>
           <Ionicons name="refresh" size={14} color={TEXT.secondary} />
         </TouchableOpacity>
         <TouchableOpacity onPress={onClose} style={styles.btn}>
