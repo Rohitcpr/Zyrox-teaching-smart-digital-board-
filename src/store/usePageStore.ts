@@ -5,18 +5,20 @@ import { generateId } from '../utils/strokeUtils';
 export interface Page {
   id: string;
   name: string;
+  sectionId?: string;
   createdAt: number;
 }
 
 interface PageStore {
   pages: Page[];
   activePageId: string;
-  addPage: () => string;
-  copyPage: (pageId: string) => Promise<string>;
-  deletePage: (id: string) => void;
-  reorderPages: (from: number, to: number) => void;
-  setActivePage: (id: string) => void;
   loadPages: () => Promise<void>;
+  addPage: () => void;
+  copyPage: (id: string) => void;
+  deletePage: (id: string) => void;
+  movePageUp: (id: string) => void;
+  movePageDown: (id: string) => void;
+  setActivePage: (id: string) => void;
   savePages: () => Promise<void>;
 }
 
@@ -24,78 +26,64 @@ export const usePageStore = create<PageStore>((set, get) => ({
   pages: [{ id: 'page_001', name: 'Page 1', createdAt: Date.now() }],
   activePageId: 'page_001',
 
-  addPage: () => {
-    const pages = get().pages;
-    const newPage: Page = {
-      id: `page_${generateId()}`,
-      name: `Page ${pages.length + 1}`,
-      createdAt: Date.now(),
-    };
-    set((s) => ({ pages: [...s.pages, newPage], activePageId: newPage.id }));
-    get().savePages();
-    return newPage.id;
+  loadPages: async () => {
+    try {
+      const raw = await AsyncStorage.getItem('zyrox_pages');
+      if (raw) {
+        const pages = JSON.parse(raw);
+        if (pages.length > 0) set({ pages, activePageId: pages[0].id });
+      }
+    } catch (e) {}
   },
 
-  copyPage: async (pageId) => {
+  savePages: async () => {
     try {
-      const raw = await AsyncStorage.getItem(`zyrox_canvas_${pageId}`);
-      const newId = `page_${generateId()}`;
-      const pages = get().pages;
-      const srcIndex = pages.findIndex((p) => p.id === pageId);
-      const srcPage = pages[srcIndex];
+      await AsyncStorage.setItem('zyrox_pages', JSON.stringify(get().pages));
+    } catch (e) {}
+  },
 
-      const newPage: Page = {
-        id: newId,
-        name: `${srcPage?.name ?? 'Page'} (Copy)`,
-        createdAt: Date.now(),
-      };
+  addPage: () => {
+    const newPage: Page = { id: `page_${generateId()}`, name: `Page ${get().pages.length + 1}`, createdAt: Date.now() };
+    set((s) => ({ pages: [...s.pages, newPage], activePageId: newPage.id }));
+    get().savePages();
+  },
 
-      if (raw) await AsyncStorage.setItem(`zyrox_canvas_${newId}`, raw);
-
-      // Insert copy RIGHT AFTER source page
-      const newPages = [...pages];
-      newPages.splice(srcIndex + 1, 0, newPage);
-
-      set({ pages: newPages, activePageId: newId });
-      get().savePages();
-      return newId;
-    } catch {
-      return get().addPage();
-    }
+  copyPage: (id) => {
+    const pages = get().pages;
+    const idx = pages.findIndex((p) => p.id === id);
+    if (idx === -1) return;
+    const orig = pages[idx];
+    const copy: Page = { ...orig, id: `page_${generateId()}`, name: `${orig.name} (Copy)`, createdAt: Date.now() };
+    const newPages = [...pages.slice(0, idx + 1), copy, ...pages.slice(idx + 1)];
+    set({ pages: newPages, activePageId: copy.id });
+    get().savePages();
   },
 
   deletePage: (id) => {
-    const { pages, activePageId } = get();
+    const pages = get().pages;
     if (pages.length === 1) return;
-    const filtered = pages.filter((p) => p.id !== id);
-    const newActive = activePageId === id ? filtered[0].id : activePageId;
-    set({ pages: filtered, activePageId: newActive });
+    const newPages = pages.filter((p) => p.id !== id);
+    set({ pages: newPages, activePageId: newPages[0].id });
     get().savePages();
   },
 
-  reorderPages: (from, to) => {
+  movePageUp: (id) => {
     const pages = [...get().pages];
-    const [moved] = pages.splice(from, 1);
-    pages.splice(to, 0, moved);
+    const idx = pages.findIndex((p) => p.id === id);
+    if (idx <= 0) return;
+    [pages[idx - 1], pages[idx]] = [pages[idx], pages[idx - 1]];
+    set({ pages });
+    get().savePages();
+  },
+
+  movePageDown: (id) => {
+    const pages = [...get().pages];
+    const idx = pages.findIndex((p) => p.id === id);
+    if (idx >= pages.length - 1) return;
+    [pages[idx + 1], pages[idx]] = [pages[idx], pages[idx + 1]];
     set({ pages });
     get().savePages();
   },
 
   setActivePage: (id) => set({ activePageId: id }),
-
-  savePages: async () => {
-    try {
-      await AsyncStorage.setItem('zyrox_pages', JSON.stringify(get().pages));
-    } catch (e) { console.error(e); }
-  },
-
-  loadPages: async () => {
-    try {
-      const raw = await AsyncStorage.getItem('zyrox_pages');
-      if (raw) {
-        const pages: Page[] = JSON.parse(raw);
-        if (pages.length > 0) set({ pages, activePageId: pages[0].id });
-      }
-    } catch (e) { console.error(e); }
-  },
 }));
