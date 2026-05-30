@@ -24,10 +24,9 @@ import { useCanvasStore } from '../src/store/useCanvasStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { usePageStore } from '../src/store/usePageStore';
 import { useStickyStore } from '../src/store/useStickyStore';
-import { useInteractionStore } from '../src/store/useInteractionStore';
 import { useAutoSave } from '../src/hooks/useAutoSave';
 import { useZoomPan } from '../src/hooks/useZoomPan';
-import { TEXT, BRAND } from '../src/constants/colors';
+import { TEXT } from '../src/constants/colors';
 
 interface ImportedItem {
   id: string; type: string; uri: string; name: string;
@@ -41,9 +40,7 @@ export default function BoardScreen() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importedItems, setImportedItems] = useState<ImportedItem[]>([]);
-
-  const { mode, setMode, releaseAll } = useInteractionStore();
-  const editMode = mode === 'edit';
+  const [editMode, setEditMode] = useState(false);
 
   const loadCanvas = useCanvasStore((s) => s.loadCanvas);
   const initCanvas = useCanvasStore((s) => s.initCanvas);
@@ -66,12 +63,9 @@ export default function BoardScreen() {
   const fabCloseRef = useRef<(() => void) | null>(null);
   const { scale, translateX, translateY, panResponder, resetZoom } = useZoomPan();
 
-  const handleCanvasTap = useCallback(() => {
-    closeAllPanels();
-    const now = Date.now();
-    if (now - lastTap.current < 300) resetZoom();
-    lastTap.current = now;
-    fabCloseRef.current?.();
+  // CRITICAL: Always start in draw mode
+  useEffect(() => {
+    setEditMode(false);
   }, []);
 
   useEffect(() => {
@@ -80,24 +74,31 @@ export default function BoardScreen() {
     else loadCanvas(currentPageId);
   }, [currentPageId]);
 
-  // CRITICAL FIX: properly release all state on remove
+  const handleCanvasTap = useCallback(() => {
+    closeAllPanels();
+    const now = Date.now();
+    if (now - lastTap.current < 300) resetZoom();
+    lastTap.current = now;
+    fabCloseRef.current?.();
+  }, []);
+
   const handleRemoveItem = useCallback((id: string) => {
     setImportedItems(prev => prev.filter(i => i.id !== id));
-    // Force release all interaction state
-    releaseAll();
-    // Small delay to ensure state is fully cleared
-    setTimeout(() => releaseAll(), 100);
-  }, [releaseAll]);
+    // CRITICAL: Force draw mode after delete
+    setEditMode(false);
+  }, []);
 
   const handleImportSuccess = useCallback((type: string, uri: string, name: string) => {
-    const newItem = { id: `import_${Date.now()}`, type, uri, name };
-    setImportedItems(prev => [...prev, newItem]);
-    setMode('edit');
-  }, [setMode]);
+    setImportedItems(prev => [...prev, { id: `import_${Date.now()}`, type, uri, name }]);
+    // Show edit mode briefly then auto switch to draw
+    setEditMode(true);
+    setTimeout(() => setEditMode(false), 1500);
+  }, []);
+
+  const switchToDraw = useCallback(() => setEditMode(false), []);
+  const switchToEdit = useCallback(() => setEditMode(true), []);
 
   useAutoSave(currentPageId);
-
-  const hasImports = importedItems.length > 0;
 
   return (
     <View style={[styles.screen, { backgroundColor: bgColor }]}>
@@ -106,7 +107,7 @@ export default function BoardScreen() {
       <View style={[styles.canvas, { backgroundColor: bgColor }]}>
         <GridOverlay type={gridType} />
 
-        {/* Images BEHIND drawing layer */}
+        {/* Imported images */}
         {importedItems.map((item) => (
           <ImportedImageLayer
             key={item.id}
@@ -117,7 +118,7 @@ export default function BoardScreen() {
           />
         ))}
 
-        {/* Drawing canvas - PanResponder only in draw mode */}
+        {/* Drawing canvas */}
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
@@ -143,23 +144,21 @@ export default function BoardScreen() {
         ))}
       </View>
 
-      {/* Floating Controls */}
-      <TopBar pageId={currentPageId} onImportPress={() => setShowImport(true)} onLayerPress={() => setShowLayerPanel(true)} />
+      {/* Top Controls */}
+      <TopBar
+        pageId={currentPageId}
+        onImportPress={() => setShowImport(true)}
+        onLayerPress={() => setShowLayerPanel(true)}
+      />
 
       {/* Mode Toggle — only when imports exist */}
-      {hasImports && (
+      {importedItems.length > 0 && (
         <View style={styles.modeBar}>
-          <TouchableOpacity
-            onPress={() => releaseAll()}
-            style={[styles.modeBtn, !editMode && styles.modeDraw]}
-          >
+          <TouchableOpacity onPress={switchToDraw} style={[styles.modeBtn, !editMode && styles.modeDraw]}>
             <Ionicons name="pencil" size={12} color={!editMode ? '#A855F7' : TEXT.disabled} />
             <Text style={[styles.modeTxt, !editMode && { color: '#A855F7' }]}>Draw</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setMode('edit')}
-            style={[styles.modeBtn, editMode && styles.modeEdit]}
-          >
+          <TouchableOpacity onPress={switchToEdit} style={[styles.modeBtn, editMode && styles.modeEdit]}>
             <Ionicons name="move" size={12} color={editMode ? '#3B82F6' : TEXT.disabled} />
             <Text style={[styles.modeTxt, editMode && { color: '#3B82F6' }]}>Edit</Text>
           </TouchableOpacity>
@@ -177,11 +176,16 @@ export default function BoardScreen() {
 
       {showPageSidebar && <PageSidebar onClose={() => setShowPageSidebar(false)} onPageSelect={(id) => setCurrentPageId(id)} />}
       {showLayerPanel && <LayerPanel onClose={() => setShowLayerPanel(false)} />}
-      {showImport && <ImportPanel onClose={() => setShowImport(false)} onImportSuccess={handleImportSuccess} />}
+      {showImport && (
+        <ImportPanel
+          onClose={() => setShowImport(false)}
+          onImportSuccess={handleImportSuccess}
+        />
+      )}
 
       <Toast message={toastMessage} visible={toastVisible} />
       <FloatingToolbar
-        onToolSelect={() => { releaseAll(); handleCanvasTap(); }}
+        onToolSelect={() => { switchToDraw(); handleCanvasTap(); }}
         onCloseRef={(fn) => { fabCloseRef.current = fn; }}
         onLayerPress={() => setShowLayerPanel(true)}
         onColorPickerPress={() => setShowColorPicker(true)}
@@ -200,7 +204,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center', left: '50%',
     transform: [{ translateX: -52 }],
     flexDirection: 'row',
-    backgroundColor: 'rgba(8,8,8,0.90)',
+    backgroundColor: 'rgba(8,8,8,0.92)',
     borderRadius: 12, padding: 3, gap: 3,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
     zIndex: 101,
