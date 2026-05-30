@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { View, StyleSheet, PanResponder } from 'react-native';
 import Svg from 'react-native-svg';
 import { useCanvasStore } from '../../store/useCanvasStore';
@@ -19,9 +19,10 @@ import { useStrokeEraser } from '../../hooks/useStrokeEraser';
 interface Props {
   onTap?: () => void;
   bgColor?: string;
+  disabled?: boolean;
 }
 
-export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) => {
+export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', disabled = false }) => {
   const beginStroke = useCanvasStore((s) => s.beginStroke);
   const addPoint = useCanvasStore((s) => s.addPoint);
   const endStroke = useCanvasStore((s) => s.endStroke);
@@ -47,8 +48,8 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) =
   const [textPos, setTextPos] = useState<{ x: number; y: number } | null>(null);
   const [showSelectionMenu, setShowSelectionMenu] = useState(false);
 
-  const toolRef = useRef({ tool, color, size, opacity, activeShape });
-  toolRef.current = { tool, color, size, opacity, activeShape };
+  const toolRef = useRef({ tool, color, size, opacity, activeShape, disabled });
+  toolRef.current = { tool, color, size, opacity, activeShape, disabled };
 
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -59,10 +60,11 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) =
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !toolRef.current.disabled,
+      onMoveShouldSetPanResponder: () => !toolRef.current.disabled && isDrawingRef.current,
 
       onPanResponderGrant: (evt) => {
+        if (toolRef.current.disabled) return;
         try {
           onTouchStart(evt);
           if (evt.nativeEvent.touches.length > 1) { isDrawingRef.current = false; return; }
@@ -75,68 +77,50 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) =
           lastPointRef.current = { x: locationX, y: locationY };
 
           if (tool === 'select') {
-            clearSelection();
-            startSelection(locationX, locationY);
-            isDrawingRef.current = true;
+            clearSelection(); startSelection(locationX, locationY); isDrawingRef.current = true;
           } else if (tool === 'text') {
-            setTextPos({ x: locationX, y: locationY });
-            isDrawingRef.current = false;
+            setTextPos({ x: locationX, y: locationY }); isDrawingRef.current = false;
           } else if (tool === 'stroke_eraser') {
-            eraseStrokeAtPoint({ x: locationX, y: locationY });
-            isDrawingRef.current = true;
+            eraseStrokeAtPoint({ x: locationX, y: locationY }); isDrawingRef.current = true;
           } else if (tool === 'shape') {
-            beginShape({ x: locationX, y: locationY });
-            isDrawingRef.current = true;
+            beginShape({ x: locationX, y: locationY }); isDrawingRef.current = true;
           } else {
-            beginStroke({ x: locationX, y: locationY, timestamp: Date.now() });
-            isDrawingRef.current = true;
+            beginStroke({ x: locationX, y: locationY, timestamp: Date.now() }); isDrawingRef.current = true;
           }
-        } catch (e) {}
+        } catch(e) {}
       },
 
       onPanResponderMove: (evt) => {
+        if (toolRef.current.disabled) return;
         try {
           if (evt.nativeEvent.touches.length > 1) return;
           if (!isDrawingRef.current) return;
-
           const { locationX, locationY } = evt.nativeEvent;
           const { tool } = toolRef.current;
-
           const last = lastPointRef.current;
           if (last && tool !== 'select' && tool !== 'stroke_eraser') {
             const dx = locationX - last.x;
             const dy = locationY - last.y;
-            if (dx * dx + dy * dy < 3) return;
+            if (dx * dx + dy * dy < 2) return; // Min 1.4px distance
           }
           lastPointRef.current = { x: locationX, y: locationY };
-
-          if (tool === 'select') {
-            updateSelection(locationX, locationY);
-          } else if (tool === 'stroke_eraser') {
-            eraseStrokeAtPoint({ x: locationX, y: locationY });
-          } else if (tool === 'shape') {
-            updateShape({ x: locationX, y: locationY });
-          } else {
-            addPoint({ x: locationX, y: locationY, timestamp: Date.now() });
-          }
-        } catch (e) {}
+          if (tool === 'select') updateSelection(locationX, locationY);
+          else if (tool === 'stroke_eraser') eraseStrokeAtPoint({ x: locationX, y: locationY });
+          else if (tool === 'shape') updateShape({ x: locationX, y: locationY });
+          else addPoint({ x: locationX, y: locationY, timestamp: Date.now() });
+        } catch(e) {}
       },
 
       onPanResponderRelease: (evt) => {
+        if (toolRef.current.disabled) return;
         try {
           const wasGesture = onTouchEnd(evt);
           reset();
           isDrawingRef.current = false;
           lastPointRef.current = null;
           if (wasGesture) return;
-
           const { tool, color, size, opacity, activeShape } = toolRef.current;
-
-          if (tool === 'select') {
-            endSelection();
-            setTimeout(() => setShowSelectionMenu(true), 100);
-            return;
-          }
+          if (tool === 'select') { endSelection(); setTimeout(() => setShowSelectionMenu(true), 100); return; }
           if (tool === 'text' || tool === 'stroke_eraser') return;
           if (tool === 'shape') {
             const start = useCanvasStore.getState().activeShapeStart;
@@ -148,18 +132,22 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) =
             if (points.length < 2) { cancelStroke(); return; }
             endStroke({ tool, color, size, opacity });
           }
-        } catch (e) {}
+        } catch(e) {}
       },
 
       onPanResponderTerminate: () => {
         isDrawingRef.current = false;
         lastPointRef.current = null;
-        try { reset(); cancelStroke(); } catch (e) {}
+        try { reset(); cancelStroke(); } catch(e) {}
       },
     })
   ).current;
 
-  const allStrokes = layers.filter((l) => l.visible).flatMap((l) => l.strokes);
+  // Memoize strokes to prevent unnecessary re-renders
+  const allStrokes = useMemo(
+    () => layers.filter((l) => l.visible).flatMap((l) => l.strokes),
+    [layers]
+  );
 
   return (
     <View style={[styles.canvas, { backgroundColor: bgColor }]} {...panResponder.panHandlers}>
@@ -174,11 +162,9 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F' }) =
         )}
         <SelectionOverlay box={selectionBox} isSelecting={isSelecting} />
       </Svg>
-
       {showSelectionMenu && selectionBox && selectedItems.strokeIds.length > 0 && (
         <SelectionMenu box={selectionBox} onClose={() => { setShowSelectionMenu(false); clearSelection(); }} />
       )}
-
       {textPos && (
         <TextTool x={textPos.x} y={textPos.y}
           onDone={(text, x, y) => { addTextItem({ text, x, y, color, fontSize: Math.max(size * 4, 16), opacity }); setTextPos(null); }}
