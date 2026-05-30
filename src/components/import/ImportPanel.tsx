@@ -181,3 +181,4 @@ const styles = StyleSheet.create({
   loadingBox: { alignItems: 'center', padding: 30, gap: 12 },
   loadingText: { fontSize: 13, color: TEXT.secondary },
 });
+// PDF handling already exists

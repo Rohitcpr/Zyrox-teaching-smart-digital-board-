@@ -1,54 +1,219 @@
-import React from 'react';
-import { View, Text, StyleSheet, useWindowDimensions, TouchableOpacity } from 'react-native';
+import React, { useState, useRef } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  useWindowDimensions, Animated, PanResponder,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BRAND, TEXT } from '../../constants/colors';
+import { TEXT, BRAND } from '../../constants/colors';
 
 interface Props {
+  id: string;
   uri: string;
-  onRemove: () => void;
+  editMode: boolean;
+  onRemove: (id: string) => void;
 }
 
-export const PDFViewerLayer: React.FC<Props> = ({ uri, onRemove }) => {
-  const { width } = useWindowDimensions();
+export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove }) => {
+  const { width, height } = useWindowDimensions();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pdfWidth, setPdfWidth] = useState(width);
+  const [pdfHeight, setPdfHeight] = useState(height * 0.7);
+
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 40 })).current;
+  const posRef = useRef({ x: 0, y: 40 });
+  const lastPinchRef = useRef<number | null>(null);
+  const baseSizeRef = useRef({ w: width, h: height * 0.7 });
+  const editModeRef = useRef(editMode);
+  editModeRef.current = editMode;
+
+  const getDistance = (touches: any[]) => {
+    if (touches.length < 2) return null;
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => editModeRef.current,
+      onStartShouldSetPanResponderCapture: () => editModeRef.current,
+      onMoveShouldSetPanResponder: () => editModeRef.current,
+      onMoveShouldSetPanResponderCapture: () => editModeRef.current,
+
+      onPanResponderGrant: (evt) => {
+        const touches = Array.from(evt.nativeEvent.touches);
+        if (touches.length >= 2) {
+          lastPinchRef.current = getDistance(touches);
+          baseSizeRef.current = { w: pdfWidth, h: pdfHeight };
+        } else {
+          pan.setOffset({ x: posRef.current.x, y: posRef.current.y });
+          pan.setValue({ x: 0, y: 0 });
+        }
+      },
+
+      onPanResponderMove: (evt, gs) => {
+        const touches = Array.from(evt.nativeEvent.touches);
+        if (touches.length >= 2) {
+          const dist = getDistance(touches);
+          if (dist && lastPinchRef.current) {
+            const scale = dist / lastPinchRef.current;
+            setPdfWidth(Math.max(200, Math.min(baseSizeRef.current.w * scale, width * 2)));
+            setPdfHeight(Math.max(150, Math.min(baseSizeRef.current.h * scale, height * 2)));
+          }
+        } else {
+          pan.x.setValue(gs.dx);
+          pan.y.setValue(gs.dy);
+        }
+      },
+
+      onPanResponderRelease: (_, gs) => {
+        pan.flattenOffset();
+        posRef.current.x += gs.dx;
+        posRef.current.y += gs.dy;
+        lastPinchRef.current = null;
+      },
+
+      onPanResponderTerminate: () => {
+        pan.flattenOffset();
+        lastPinchRef.current = null;
+      },
+    })
+  ).current;
+
+  // Try to use react-native-pdf-light
+  let PdfComponent: any = null;
+  try {
+    PdfComponent = require('react-native-pdf-light').default;
+  } catch (e) {
+    PdfComponent = null;
+  }
+
   const filename = uri.split('/').pop() ?? 'document.pdf';
 
   return (
-    <View style={[styles.container, { width: width - 32 }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
+        editMode && styles.editBorder,
+      ]}
+      {...(editMode ? panResponder.panHandlers : {})}
+      pointerEvents={editMode ? 'box-only' : 'none'}
+    >
+      {/* PDF Header */}
       <View style={styles.header}>
-        <Ionicons name="document-text" size={20} color="#EF4444" />
+        <Ionicons name="document-text" size={14} color="#EF4444" />
         <Text style={styles.filename} numberOfLines={1}>{filename}</Text>
-        <TouchableOpacity onPress={onRemove} style={styles.closeBtn}>
-          <Ionicons name="close" size={16} color={TEXT.secondary} />
+        <Text style={styles.pageInfo}>{currentPage}/{totalPages}</Text>
+        {editMode && (
+          <TouchableOpacity onPress={() => onRemove(id)} style={styles.closeBtn}>
+            <Ionicons name="close" size={14} color={TEXT.secondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* PDF Content */}
+      <View style={[styles.pdfArea, { width: pdfWidth, height: pdfHeight }]}>
+        {PdfComponent ? (
+          <PdfComponent
+            source={{ uri }}
+            style={{ width: pdfWidth, height: pdfHeight }}
+            onLoadComplete={(pages: number) => setTotalPages(pages)}
+            page={currentPage}
+          />
+        ) : (
+          // Fallback UI
+          <View style={styles.fallback}>
+            <Ionicons name="document-text-outline" size={52} color={TEXT.disabled} />
+            <Text style={styles.fallbackTitle}>{filename}</Text>
+            <Text style={styles.fallbackSub}>Draw over to annotate</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Page Navigation */}
+      <View style={styles.navBar}>
+        <TouchableOpacity
+          onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+          style={[styles.navBtn, currentPage === 1 && { opacity: 0.3 }]}
+        >
+          <Ionicons name="chevron-back" size={16} color={TEXT.secondary} />
+        </TouchableOpacity>
+
+        <Text style={styles.pageText}>Page {currentPage} of {totalPages}</Text>
+
+        <TouchableOpacity
+          onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          disabled={currentPage === totalPages}
+          style={[styles.navBtn, currentPage === totalPages && { opacity: 0.3 }]}
+        >
+          <Ionicons name="chevron-forward" size={16} color={TEXT.secondary} />
         </TouchableOpacity>
       </View>
-      <View style={styles.body}>
-        <Ionicons name="document-text-outline" size={48} color={TEXT.disabled} />
-        <Text style={styles.title}>PDF Imported</Text>
-        <Text style={styles.sub}>Draw over this area to annotate</Text>
-        <Text style={styles.note}>Full PDF viewer available in Dev Build</Text>
-      </View>
-    </View>
+
+      {/* Edit mode handles */}
+      {editMode && (
+        <>
+          <View style={[styles.handle, styles.tl]} />
+          <View style={[styles.handle, styles.tr]} />
+          <View style={[styles.handle, styles.bl]} />
+          <View style={[styles.handle, styles.br]} />
+          <View style={styles.controls}>
+            <TouchableOpacity
+              onPress={() => {
+                setPdfWidth(width);
+                setPdfHeight(height * 0.7);
+                pan.setValue({ x: 0, y: 0 });
+                posRef.current = { x: 0, y: 0 };
+              }}
+              style={styles.ctrlBtn}
+            >
+              <Ionicons name="scan-outline" size={13} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onRemove(id)} style={[styles.ctrlBtn, { backgroundColor: '#EF4444' }]}>
+              <Ionicons name="trash" size={13} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute', top: 60, left: 16,
-    backgroundColor: 'rgba(10,10,20,0.95)',
-    borderRadius: 14, borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.30)',
-    overflow: 'hidden', zIndex: 5,
-  },
+  container: { position: 'absolute', zIndex: 5, borderRadius: 8, overflow: 'hidden' },
+  editBorder: { borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.70)', borderRadius: 8 },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(239,68,68,0.08)',
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(10,10,20,0.95)',
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  filename: { flex: 1, fontSize: 12, fontWeight: '600', color: TEXT.primary },
-  closeBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  body: { alignItems: 'center', padding: 32, gap: 8 },
-  title: { fontSize: 14, fontWeight: '700', color: TEXT.primary },
-  sub: { fontSize: 12, color: TEXT.secondary },
-  note: { fontSize: 10, color: TEXT.disabled, textAlign: 'center', marginTop: 4 },
+  filename: { flex: 1, fontSize: 11, fontWeight: '600', color: TEXT.primary },
+  pageInfo: { fontSize: 10, color: TEXT.disabled, fontWeight: '600' },
+  closeBtn: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  pdfArea: { backgroundColor: '#1A1A2E' },
+  fallback: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    gap: 10, backgroundColor: '#1A1A2E',
+  },
+  fallbackTitle: { fontSize: 13, fontWeight: '700', color: TEXT.primary },
+  fallbackSub: { fontSize: 11, color: TEXT.secondary },
+  navBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(10,10,20,0.95)',
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  navBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)' },
+  pageText: { fontSize: 11, color: TEXT.secondary, fontWeight: '600' },
+  handle: { position: 'absolute', width: 12, height: 12, borderRadius: 3, backgroundColor: '#3B82F6', borderWidth: 2, borderColor: '#fff' },
+  tl: { top: -6, left: -6 },
+  tr: { top: -6, right: -6 },
+  bl: { bottom: -6, left: -6 },
+  br: { bottom: -6, right: -6 },
+  controls: { position: 'absolute', top: 36, right: -36, gap: 4 },
+  ctrlBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(124,58,237,0.90)', alignItems: 'center', justifyContent: 'center' },
 });
