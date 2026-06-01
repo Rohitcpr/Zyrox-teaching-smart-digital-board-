@@ -161,7 +161,8 @@ export const FloatingToolbar: React.FC<Props> = ({ onToolSelect, onCloseRef, onL
 
 const styles = StyleSheet.create({
   wrapper: { position: 'absolute', zIndex: 100 },
-  menu: { position: 'absolute', backgroundColor: GLASS.background, borderRadius: 18, borderWidth: 1, borderColor: GLASS.border, padding: 12, gap: 8 },
+  menu: { position: 'absolute', backgroundColor: 'rgba(8,8,8,0.97)',
+    backdropFilter: 'blur(10px)', borderRadius: 18, borderWidth: 1, borderColor: GLASS.border, padding: 12, gap: 8 },
   sectionLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 2, color: TEXT.disabled },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
