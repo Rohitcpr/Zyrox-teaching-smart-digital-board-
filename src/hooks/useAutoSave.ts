@@ -1,24 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { useCanvasStore } from '../store/useCanvasStore';
-import { useAppStore } from '../store/useAppStore';
 
 export const useAutoSave = (pageId: string) => {
-  const isDirty = useCanvasStore((s) => s.isDirty);
   const saveCanvas = useCanvasStore((s) => s.saveCanvas);
-  const autoSave = useAppStore((s) => s.settings.autoSave);
-  const interval = useAppStore((s) => s.settings.autoSaveInterval);
-  const showToast = useAppStore((s) => s.showToast);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDirty = useCanvasStore((s) => s.isDirty);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!autoSave || !isDirty) return;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      await saveCanvas(pageId);
-      showToast('✓ Saved');
-    }, interval);
+    timerRef.current = setInterval(async () => {
+      if (isDirty) {
+        try {
+          await saveCanvas(pageId);
+        } catch (e) {}
+      }
+    }, 30000);
+
     return () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isDirty, autoSave, interval, pageId, saveCanvas, showToast]);
+  }, [pageId, isDirty]);
 };
