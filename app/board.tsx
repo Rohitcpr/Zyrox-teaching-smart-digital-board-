@@ -40,6 +40,8 @@ export default function BoardScreen() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importedItems, setImportedItems] = useState<ImportedItem[]>([]);
+  
+  // CRITICAL: editMode only for imported image manipulation
   const [editMode, setEditMode] = useState(false);
 
   const loadCanvas = useCanvasStore((s) => s.loadCanvas);
@@ -64,9 +66,7 @@ export default function BoardScreen() {
   const { scale, translateX, translateY, panResponder, resetZoom } = useZoomPan();
 
   // CRITICAL: Always start in draw mode
-  useEffect(() => {
-    setEditMode(false);
-  }, []);
+  useEffect(() => { setEditMode(false); }, []);
 
   useEffect(() => {
     loadPages();
@@ -82,17 +82,17 @@ export default function BoardScreen() {
     fabCloseRef.current?.();
   }, []);
 
-  const handleRemoveItem = useCallback((id: string) => {
-    setImportedItems(prev => prev.filter(i => i.id !== id));
-    // CRITICAL: Force draw mode after delete
+  // CRITICAL FIX: Never auto-set editMode on import
+  const handleImportSuccess = useCallback((type: string, uri: string, name: string) => {
+    setImportedItems(prev => [...prev, { id: `import_${Date.now()}`, type, uri, name }]);
+    // Stay in DRAW mode - user manually switches to edit
     setEditMode(false);
   }, []);
 
-  const handleImportSuccess = useCallback((type: string, uri: string, name: string) => {
-    setImportedItems(prev => [...prev, { id: `import_${Date.now()}`, type, uri, name }]);
-    // Show edit mode briefly then auto switch to draw
-    setEditMode(true);
-    setTimeout(() => setEditMode(false), 1500);
+  // CRITICAL FIX: Force draw mode on remove
+  const handleRemoveItem = useCallback((id: string) => {
+    setImportedItems(prev => prev.filter(i => i.id !== id));
+    setEditMode(false);
   }, []);
 
   const switchToDraw = useCallback(() => setEditMode(false), []);
@@ -120,21 +120,11 @@ export default function BoardScreen() {
 
         {/* Drawing canvas */}
         <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { transform: [{ translateX }, { translateY }, { scale }] },
-          ]}
+          style={[StyleSheet.absoluteFill, { transform: [{ translateX }, { translateY }, { scale }] }]}
           pointerEvents={editMode ? 'none' : 'auto'}
         >
-          <View
-            style={StyleSheet.absoluteFill}
-            {...(!editMode ? panResponder.panHandlers : {})}
-          >
-            <DrawingCanvas
-              onTap={handleCanvasTap}
-              bgColor={bgColor}
-              disabled={editMode}
-            />
+          <View style={StyleSheet.absoluteFill} {...(!editMode ? panResponder.panHandlers : {})}>
+            <DrawingCanvas onTap={handleCanvasTap} bgColor={bgColor} disabled={editMode} />
           </View>
         </Animated.View>
 
@@ -145,13 +135,9 @@ export default function BoardScreen() {
       </View>
 
       {/* Top Controls */}
-      <TopBar
-        pageId={currentPageId}
-        onImportPress={() => setShowImport(true)}
-        onLayerPress={() => setShowLayerPanel(true)}
-      />
+      <TopBar pageId={currentPageId} onImportPress={() => setShowImport(true)} onLayerPress={() => setShowLayerPanel(true)} />
 
-      {/* Mode Toggle — only when imports exist */}
+      {/* Draw/Edit toggle - ONLY when imports exist */}
       {importedItems.length > 0 && (
         <View style={styles.modeBar}>
           <TouchableOpacity onPress={switchToDraw} style={[styles.modeBtn, !editMode && styles.modeDraw]}>
@@ -174,14 +160,9 @@ export default function BoardScreen() {
       {isBgPanelOpen && <View style={styles.floatPanel}><CanvasBackground /></View>}
       {showColorPicker && <View style={styles.floatPanel}><CustomColorPicker onClose={() => setShowColorPicker(false)} /></View>}
 
-      {showPageSidebar && <PageSidebar onClose={() => setShowPageSidebar(false)} onPageSelect={(id) => setCurrentPageId(id)} />}
+      {showPageSidebar && <PageSidebar onClose={() => setShowPageSidebar(false)} onPageSelect={(id) => { setCurrentPageId(id); setEditMode(false); }} />}
       {showLayerPanel && <LayerPanel onClose={() => setShowLayerPanel(false)} />}
-      {showImport && (
-        <ImportPanel
-          onClose={() => setShowImport(false)}
-          onImportSuccess={handleImportSuccess}
-        />
-      )}
+      {showImport && <ImportPanel onClose={() => setShowImport(false)} onImportSuccess={handleImportSuccess} />}
 
       <Toast message={toastMessage} visible={toastVisible} />
       <FloatingToolbar
@@ -200,9 +181,8 @@ const styles = StyleSheet.create({
   canvas: { ...StyleSheet.absoluteFillObject },
   floatPanel: { position: 'absolute', bottom: 80, left: 80, right: 12, zIndex: 50 },
   modeBar: {
-    position: 'absolute', top: 52,
-    alignSelf: 'center', left: '50%',
-    transform: [{ translateX: -52 }],
+    position: 'absolute', top: 52, alignSelf: 'center',
+    left: '50%', transform: [{ translateX: -52 }],
     flexDirection: 'row',
     backgroundColor: 'rgba(8,8,8,0.92)',
     borderRadius: 12, padding: 3, gap: 3,
