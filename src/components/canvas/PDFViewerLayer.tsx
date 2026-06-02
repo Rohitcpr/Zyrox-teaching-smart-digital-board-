@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  useWindowDimensions, Animated, PanResponder,
+  useWindowDimensions, Animated, PanResponder, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TEXT, BRAND } from '../../constants/colors';
@@ -17,13 +17,14 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
   const { width, height } = useWindowDimensions();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [pdfWidth, setPdfWidth] = useState(width);
-  const [pdfHeight, setPdfHeight] = useState(height * 0.7);
+  const [loading, setLoading] = useState(true);
+  const [pdfW, setPdfW] = useState(width);
+  const [pdfH, setPdfH] = useState(height * 0.75);
 
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 40 })).current;
   const posRef = useRef({ x: 0, y: 40 });
   const lastPinchRef = useRef<number | null>(null);
-  const baseSizeRef = useRef({ w: width, h: height * 0.7 });
+  const baseSizeRef = useRef({ w: width, h: height * 0.75 });
   const editModeRef = useRef(editMode);
   editModeRef.current = editMode;
 
@@ -45,7 +46,7 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
         const touches = Array.from(evt.nativeEvent.touches);
         if (touches.length >= 2) {
           lastPinchRef.current = getDistance(touches);
-          baseSizeRef.current = { w: pdfWidth, h: pdfHeight };
+          baseSizeRef.current = { w: pdfW, h: pdfH };
         } else {
           pan.setOffset({ x: posRef.current.x, y: posRef.current.y });
           pan.setValue({ x: 0, y: 0 });
@@ -58,8 +59,8 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
           const dist = getDistance(touches);
           if (dist && lastPinchRef.current) {
             const scale = dist / lastPinchRef.current;
-            setPdfWidth(Math.max(200, Math.min(baseSizeRef.current.w * scale, width * 2)));
-            setPdfHeight(Math.max(150, Math.min(baseSizeRef.current.h * scale, height * 2)));
+            setPdfW(Math.max(200, Math.min(baseSizeRef.current.w * scale, width * 2)));
+            setPdfH(Math.max(150, Math.min(baseSizeRef.current.h * scale, height * 2)));
           }
         } else {
           pan.x.setValue(gs.dx);
@@ -81,13 +82,9 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
     })
   ).current;
 
-  // Try to use react-native-pdf-light
-  let PdfComponent: any = null;
-  try {
-    PdfComponent = require('react-native-pdf-light').default;
-  } catch (e) {
-    PdfComponent = null;
-  }
+  // Try react-native-pdf
+  let Pdf: any = null;
+  try { Pdf = require('react-native-pdf').default; } catch (e) {}
 
   const filename = uri.split('/').pop() ?? 'document.pdf';
 
@@ -101,7 +98,7 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
       {...(editMode ? panResponder.panHandlers : {})}
       pointerEvents={editMode ? 'box-only' : 'none'}
     >
-      {/* PDF Header */}
+      {/* Header */}
       <View style={styles.header}>
         <Ionicons name="document-text" size={14} color="#EF4444" />
         <Text style={styles.filename} numberOfLines={1}>{filename}</Text>
@@ -114,20 +111,36 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
       </View>
 
       {/* PDF Content */}
-      <View style={[styles.pdfArea, { width: pdfWidth, height: pdfHeight }]}>
-        {PdfComponent ? (
-          <PdfComponent
-            source={{ uri }}
-            style={{ width: pdfWidth, height: pdfHeight }}
-            onLoadComplete={(pages: number) => setTotalPages(pages)}
-            page={currentPage}
-          />
+      <View style={[styles.pdfArea, { width: pdfW, height: pdfH }]}>
+        {Pdf ? (
+          <>
+            {loading && (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="large" color={BRAND.primaryLight} />
+                <Text style={styles.loadingText}>Loading PDF...</Text>
+              </View>
+            )}
+            <Pdf
+              source={{ uri, cache: true }}
+              style={[styles.pdf, { width: pdfW, height: pdfH }]}
+              onLoadComplete={(pages: number) => {
+                setTotalPages(pages);
+                setLoading(false);
+              }}
+              onPageChanged={(page: number) => setCurrentPage(page)}
+              onError={() => setLoading(false)}
+              page={currentPage}
+              enablePaging={true}
+              horizontal={false}
+              fitPolicy={0}
+            />
+          </>
         ) : (
-          // Fallback UI
           <View style={styles.fallback}>
-            <Ionicons name="document-text-outline" size={52} color={TEXT.disabled} />
+            <Ionicons name="document-text-outline" size={48} color={TEXT.disabled} />
             <Text style={styles.fallbackTitle}>{filename}</Text>
             <Text style={styles.fallbackSub}>Draw over to annotate</Text>
+            <Text style={styles.fallbackNote}>PDF viewer needs dev build</Text>
           </View>
         )}
       </View>
@@ -137,17 +150,15 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
         <TouchableOpacity
           onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
           disabled={currentPage === 1}
-          style={[styles.navBtn, currentPage === 1 && { opacity: 0.3 }]}
+          style={[styles.navBtn, currentPage === 1 && styles.navBtnDisabled]}
         >
           <Ionicons name="chevron-back" size={16} color={TEXT.secondary} />
         </TouchableOpacity>
-
-        <Text style={styles.pageText}>Page {currentPage} of {totalPages}</Text>
-
+        <Text style={styles.pageText}>Page {currentPage} / {totalPages}</Text>
         <TouchableOpacity
           onPress={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
           disabled={currentPage === totalPages}
-          style={[styles.navBtn, currentPage === totalPages && { opacity: 0.3 }]}
+          style={[styles.navBtn, currentPage === totalPages && styles.navBtnDisabled]}
         >
           <Ionicons name="chevron-forward" size={16} color={TEXT.secondary} />
         </TouchableOpacity>
@@ -163,8 +174,8 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
           <View style={styles.controls}>
             <TouchableOpacity
               onPress={() => {
-                setPdfWidth(width);
-                setPdfHeight(height * 0.7);
+                setPdfW(width);
+                setPdfH(height * 0.75);
                 pan.setValue({ x: 0, y: 0 });
                 posRef.current = { x: 0, y: 0 };
               }}
@@ -184,36 +195,38 @@ export const PDFViewerLayer: React.FC<Props> = ({ id, uri, editMode, onRemove })
 
 const styles = StyleSheet.create({
   container: { position: 'absolute', zIndex: 5, borderRadius: 8, overflow: 'hidden' },
-  editBorder: { borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.70)', borderRadius: 8 },
+  editBorder: { borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.70)' },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(10,10,20,0.95)',
+    backgroundColor: 'rgba(10,10,20,0.97)',
     paddingHorizontal: 10, paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   filename: { flex: 1, fontSize: 11, fontWeight: '600', color: TEXT.primary },
   pageInfo: { fontSize: 10, color: TEXT.disabled, fontWeight: '600' },
   closeBtn: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  pdfArea: { backgroundColor: '#1A1A2E' },
-  fallback: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    gap: 10, backgroundColor: '#1A1A2E',
-  },
+  pdfArea: { backgroundColor: '#1a1a2e', position: 'relative' },
+  pdf: { flex: 1 },
+  loadingBox: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1a1a2e' },
+  loadingText: { fontSize: 12, color: TEXT.secondary },
+  fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#1a1a2e' },
   fallbackTitle: { fontSize: 13, fontWeight: '700', color: TEXT.primary },
   fallbackSub: { fontSize: 11, color: TEXT.secondary },
+  fallbackNote: { fontSize: 10, color: TEXT.disabled },
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: 'rgba(10,10,20,0.95)',
+    backgroundColor: 'rgba(10,10,20,0.97)',
     paddingHorizontal: 16, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
   },
   navBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)' },
+  navBtnDisabled: { opacity: 0.3 },
   pageText: { fontSize: 11, color: TEXT.secondary, fontWeight: '600' },
   handle: { position: 'absolute', width: 12, height: 12, borderRadius: 3, backgroundColor: '#3B82F6', borderWidth: 2, borderColor: '#fff' },
   tl: { top: -6, left: -6 },
   tr: { top: -6, right: -6 },
   bl: { bottom: -6, left: -6 },
   br: { bottom: -6, right: -6 },
-  controls: { position: 'absolute', top: 36, right: -36, gap: 4 },
+  controls: { position: 'absolute', top: 36, right: -34, gap: 4 },
   ctrlBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(124,58,237,0.90)', alignItems: 'center', justifyContent: 'center' },
 });

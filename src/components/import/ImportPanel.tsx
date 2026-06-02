@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { GlassPanel } from '../ui/GlassPanel';
-import { useCanvasStore } from '../../store/useCanvasStore';
 import { BRAND, TEXT } from '../../constants/colors';
 
 interface Props {
@@ -42,11 +41,11 @@ export const ImportPanel: React.FC<Props> = ({ onClose, onImportSuccess }) => {
       setLoading(true);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Allow gallery access to import images');
+        Alert.alert('Permission needed', 'Allow gallery access');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 1,
         allowsEditing: false,
       });
@@ -70,13 +69,9 @@ export const ImportPanel: React.FC<Props> = ({ onClose, onImportSuccess }) => {
         Alert.alert('Permission needed', 'Allow camera access');
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        quality: 1,
-        allowsEditing: false,
-      });
+      const result = await ImagePicker.launchCameraAsync({ quality: 1 });
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        onImportSuccess('image', asset.uri, 'camera_photo.jpg');
+        onImportSuccess('image', result.assets[0].uri, 'camera_photo.jpg');
         onClose();
       }
     } catch (e) {
@@ -87,27 +82,9 @@ export const ImportPanel: React.FC<Props> = ({ onClose, onImportSuccess }) => {
   };
 
   const OPTIONS = [
-    {
-      icon: 'document-text',
-      label: 'Import PDF',
-      sub: 'Annotate PDF file',
-      color: '#EF4444',
-      onPress: handleImportPDF,
-    },
-    {
-      icon: 'image',
-      label: 'Import Image',
-      sub: 'PNG, JPG from gallery',
-      color: '#22C55E',
-      onPress: handleImportImage,
-    },
-    {
-      icon: 'camera',
-      label: 'Take Photo',
-      sub: 'Use camera',
-      color: '#3B82F6',
-      onPress: handleTakePhoto,
-    },
+    { icon: 'document-text', label: 'Import PDF',   sub: 'Annotate PDF',       color: '#EF4444', onPress: handleImportPDF },
+    { icon: 'image',         label: 'Import Image', sub: 'PNG, JPG from gallery', color: '#22C55E', onPress: handleImportImage },
+    { icon: 'camera',        label: 'Take Photo',   sub: 'Use camera',         color: '#3B82F6', onPress: handleTakePhoto },
   ];
 
   return (
@@ -129,11 +106,8 @@ export const ImportPanel: React.FC<Props> = ({ onClose, onImportSuccess }) => {
         ) : (
           <View style={styles.grid}>
             {OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.label}
-                onPress={opt.onPress}
-                style={[styles.card, { borderColor: opt.color + '40' }]}
-              >
+              <TouchableOpacity key={opt.label} onPress={opt.onPress}
+                style={[styles.card, { borderColor: opt.color + '40' }]}>
                 <View style={[styles.iconBox, { backgroundColor: opt.color + '20' }]}>
                   <Ionicons name={opt.icon as any} size={28} color={opt.color} />
                 </View>
@@ -149,36 +123,17 @@ export const ImportPanel: React.FC<Props> = ({ onClose, onImportSuccess }) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject, zIndex: 300,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 300, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
   backdrop: { ...StyleSheet.absoluteFillObject },
   panel: { width: '88%', padding: 20, zIndex: 301 },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 20,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   title: { fontSize: 16, fontWeight: '800', color: '#F0F0FF', letterSpacing: 1 },
-  closeBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+  closeBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
   grid: { flexDirection: 'row', gap: 12 },
-  card: {
-    flex: 1, padding: 14, alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 14, borderWidth: 1,
-  },
-  iconBox: {
-    width: 52, height: 52, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  card: { flex: 1, padding: 14, alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, borderWidth: 1 },
+  iconBox: { width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   cardLabel: { fontSize: 12, fontWeight: '700', color: '#F0F0FF', textAlign: 'center' },
   cardSub: { fontSize: 10, color: TEXT.disabled, textAlign: 'center' },
   loadingBox: { alignItems: 'center', padding: 30, gap: 12 },
   loadingText: { fontSize: 13, color: TEXT.secondary },
 });
-// PDF handling already exists

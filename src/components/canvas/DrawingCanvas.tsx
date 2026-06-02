@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, PanResponder } from 'react-native';
 import Svg from 'react-native-svg';
 import { useCanvasStore } from '../../store/useCanvasStore';
@@ -22,7 +22,7 @@ interface Props {
   disabled?: boolean;
 }
 
-export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', disabled = false }) => {
+export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0A0A0F', disabled = false }) => {
   const beginStroke = useCanvasStore((s) => s.beginStroke);
   const addPoint = useCanvasStore((s) => s.addPoint);
   const endStroke = useCanvasStore((s) => s.endStroke);
@@ -95,15 +95,19 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', dis
         try {
           if (evt.nativeEvent.touches.length > 1) return;
           if (!isDrawingRef.current) return;
+
           const { locationX, locationY } = evt.nativeEvent;
           const { tool } = toolRef.current;
+
+          // Performance: minimum distance filter
           const last = lastPointRef.current;
           if (last && tool !== 'select' && tool !== 'stroke_eraser') {
             const dx = locationX - last.x;
             const dy = locationY - last.y;
-            if (dx * dx + dy * dy < 2) return; // Min 1.4px distance
+            if (dx * dx + dy * dy < 2) return; // < 1.4px skip
           }
           lastPointRef.current = { x: locationX, y: locationY };
+
           if (tool === 'select') updateSelection(locationX, locationY);
           else if (tool === 'stroke_eraser') eraseStrokeAtPoint({ x: locationX, y: locationY });
           else if (tool === 'shape') updateShape({ x: locationX, y: locationY });
@@ -112,15 +116,21 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', dis
       },
 
       onPanResponderRelease: (evt) => {
-        if (toolRef.current.disabled) return;
+        if (toolRef.current.disabled) { isDrawingRef.current = false; return; }
         try {
           const wasGesture = onTouchEnd(evt);
           reset();
           isDrawingRef.current = false;
           lastPointRef.current = null;
           if (wasGesture) return;
+
           const { tool, color, size, opacity, activeShape } = toolRef.current;
-          if (tool === 'select') { endSelection(); setTimeout(() => setShowSelectionMenu(true), 100); return; }
+
+          if (tool === 'select') {
+            endSelection();
+            setTimeout(() => setShowSelectionMenu(true), 100);
+            return;
+          }
           if (tool === 'text' || tool === 'stroke_eraser') return;
           if (tool === 'shape') {
             const start = useCanvasStore.getState().activeShapeStart;
@@ -143,7 +153,7 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', dis
     })
   ).current;
 
-  // Memoize strokes to prevent unnecessary re-renders
+  // Performance: memoize strokes
   const allStrokes = useMemo(
     () => layers.filter((l) => l.visible).flatMap((l) => l.strokes),
     [layers]
@@ -157,14 +167,18 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', dis
         <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
         <ActiveStroke points={activeStrokePoints} color={color} size={size} opacity={opacity} tool={tool} eraserColor={bgColor} />
         {tool === 'shape' && activeShapeStart && activeShapeEnd && (
-          <ActiveShape type={activeShape} startX={activeShapeStart.x} startY={activeShapeStart.y}
-            endX={activeShapeEnd.x} endY={activeShapeEnd.y} color={color} size={size} opacity={opacity} />
+          <ActiveShape type={activeShape}
+            startX={activeShapeStart.x} startY={activeShapeStart.y}
+            endX={activeShapeEnd.x} endY={activeShapeEnd.y}
+            color={color} size={size} opacity={opacity} />
         )}
         <SelectionOverlay box={selectionBox} isSelecting={isSelecting} />
       </Svg>
+
       {showSelectionMenu && selectionBox && selectedItems.strokeIds.length > 0 && (
         <SelectionMenu box={selectionBox} onClose={() => { setShowSelectionMenu(false); clearSelection(); }} />
       )}
+
       {textPos && (
         <TextTool x={textPos.x} y={textPos.y}
           onDone={(text, x, y) => { addTextItem({ text, x, y, color, fontSize: Math.max(size * 4, 16), opacity }); setTextPos(null); }}
@@ -173,6 +187,8 @@ export const DrawingCanvas: React.FC<Props> = ({ onTap, bgColor = '#0A0A0F', dis
       )}
     </View>
   );
-};
+});
+
+DrawingCanvas.displayName = 'DrawingCanvas';
 
 const styles = StyleSheet.create({ canvas: { flex: 1 } });

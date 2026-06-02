@@ -18,7 +18,8 @@ import { LayerPanel } from '../src/components/layers/LayerPanel';
 import { PageSidebar } from '../src/components/pages/PageSidebar';
 import { PageFab } from '../src/components/pages/PageFab';
 import { ImportPanel } from '../src/components/import/ImportPanel';
-import { ImportedImageLayer } from '../src/components/canvas/ImportedImageLayer';
+import { ImportedImageLayer }
+import { PDFViewerLayer } from '../src/components/canvas/ImportedImageLayer';
 import { StickyNote } from '../src/components/canvas/StickyNote';
 import { useCanvasStore } from '../src/store/useCanvasStore';
 import { useAppStore } from '../src/store/useAppStore';
