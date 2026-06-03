@@ -51,10 +51,11 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
   const toolRef = useRef({ tool, color, size, opacity, activeShape, disabled });
   toolRef.current = { tool, color, size, opacity, activeShape, disabled };
 
+  // Use refs for all drawing state - NO re-renders during drawing
   const isDrawingRef = useRef(false);
-  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-  const touchCountRef = useRef(0);
   const strokeStartedRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const lastTimeRef = useRef(0);
 
   const { shouldReject, reset } = usePalmRejection();
   const { onTouchStart, onTouchEnd } = useTwoFingerGesture();
@@ -63,33 +64,31 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !toolRef.current.disabled,
-      onMoveShouldSetPanResponder: () => !toolRef.current.disabled,
+      onMoveShouldSetPanResponder: () => !toolRef.current.disabled && isDrawingRef.current,
+      onPanResponderTerminationRequest: () => true,
 
       onPanResponderGrant: (evt) => {
         if (toolRef.current.disabled) return;
         try {
-          touchCountRef.current = evt.nativeEvent.touches.length;
-          onTouchStart(evt);
-
           if (evt.nativeEvent.touches.length > 1) {
-            // Multi-touch — cancel any active stroke
-            if (strokeStartedRef.current) {
-              try { cancelStroke(); } catch(e) {}
-              strokeStartedRef.current = false;
-            }
             isDrawingRef.current = false;
+            strokeStartedRef.current = false;
             return;
           }
 
+          onTouchStart(evt);
           if (shouldReject(evt)) { isDrawingRef.current = false; return; }
 
           const { locationX, locationY } = evt.nativeEvent;
           const { tool } = toolRef.current;
+
           onTap?.();
           setShowSelectionMenu(false);
-          lastPointRef.current = { x: locationX, y: locationY };
+
           isDrawingRef.current = true;
           strokeStartedRef.current = false;
+          lastPointRef.current = { x: locationX, y: locationY };
+          lastTimeRef.current = Date.now();
 
           if (tool === 'select') {
             clearSelection();
@@ -113,29 +112,37 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
 
       onPanResponderMove: (evt) => {
         if (toolRef.current.disabled) return;
+        if (!isDrawingRef.current) return;
+        if (evt.nativeEvent.touches.length > 1) {
+          isDrawingRef.current = false;
+          strokeStartedRef.current = false;
+          try { cancelStroke(); } catch(e) {}
+          return;
+        }
+
         try {
-          // If more fingers join — stop drawing
-          if (evt.nativeEvent.touches.length > 1) {
-            if (strokeStartedRef.current) {
-              try { cancelStroke(); } catch(e) {}
-              strokeStartedRef.current = false;
-            }
-            isDrawingRef.current = false;
-            return;
-          }
-
-          if (!isDrawingRef.current) return;
-
           const { locationX, locationY } = evt.nativeEvent;
           const { tool } = toolRef.current;
 
-          // Distance filter — prevent too many points
+          // Strict distance filter
           const last = lastPointRef.current;
-          if (last && tool !== 'select' && tool !== 'stroke_eraser') {
+          if (last) {
             const dx = locationX - last.x;
             const dy = locationY - last.y;
-            if (dx * dx + dy * dy < 4) return; // min 2px
+            const distSq = dx * dx + dy * dy;
+
+            // Minimum 3px for normal, 1px for eraser
+            const minDist = tool === 'stroke_eraser' ? 1 : 3;
+            if (distSq < minDist * minDist) return;
+
+            // Direction validation - ignore extreme jumps (> 200px)
+            if (distSq > 40000) {
+              // Too far - finger probably lifted and restarted
+              lastPointRef.current = { x: locationX, y: locationY };
+              return;
+            }
           }
+
           lastPointRef.current = { x: locationX, y: locationY };
 
           if (tool === 'select') {
@@ -151,23 +158,19 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
       },
 
       onPanResponderRelease: (evt) => {
-        if (toolRef.current.disabled) {
-          isDrawingRef.current = false;
-          strokeStartedRef.current = false;
-          return;
-        }
+        const wasDrawing = isDrawingRef.current;
+        const wasStroke = strokeStartedRef.current;
+
+        isDrawingRef.current = false;
+        strokeStartedRef.current = false;
+        lastPointRef.current = null;
+
+        if (toolRef.current.disabled || !wasDrawing) return;
+
         try {
           const wasGesture = onTouchEnd(evt);
           reset();
-
-          const wasDrawing = isDrawingRef.current;
-          const wasStroke = strokeStartedRef.current;
-
-          isDrawingRef.current = false;
-          strokeStartedRef.current = false;
-          lastPointRef.current = null;
-
-          if (wasGesture || !wasDrawing) return;
+          if (wasGesture) return;
 
           const { tool, color, size, opacity, activeShape } = toolRef.current;
 
@@ -189,21 +192,16 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
             endStroke({ tool, color, size, opacity });
           }
         } catch(e) {
-          isDrawingRef.current = false;
-          strokeStartedRef.current = false;
+          try { cancelStroke(); } catch(e2) {}
         }
       },
 
       onPanResponderTerminate: () => {
-        // CRITICAL: Always reset on terminate
         isDrawingRef.current = false;
         strokeStartedRef.current = false;
         lastPointRef.current = null;
         try { reset(); cancelStroke(); } catch(e) {}
       },
-
-      // CRITICAL: Allow termination so system can reset
-      onPanResponderTerminationRequest: () => true,
     })
   ).current;
 
@@ -218,7 +216,11 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
         <ShapeRenderer shapes={shapes} />
         <TextRenderer items={textItems} />
         <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
-        <ActiveStroke points={activeStrokePoints} color={color} size={size} opacity={opacity} tool={tool} eraserColor={bgColor} />
+        <ActiveStroke
+          points={activeStrokePoints}
+          color={color} size={size} opacity={opacity}
+          tool={tool} eraserColor={bgColor}
+        />
         {tool === 'shape' && activeShapeStart && activeShapeEnd && (
           <ActiveShape type={activeShape}
             startX={activeShapeStart.x} startY={activeShapeStart.y}
