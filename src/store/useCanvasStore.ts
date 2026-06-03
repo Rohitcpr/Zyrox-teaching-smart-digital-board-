@@ -1,149 +1,184 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateId, pointsToSvgPath } from '../utils/strokeUtils';
 import type { Stroke, Layer, Point } from '../types/canvas.types';
-import type { Shape } from '../types/shape.types';
-import type { TextItem } from '../components/text/TextRenderer';
-import { generateId, simplifyPoints } from '../utils/strokeUtils';
-import { CANVAS, STORAGE } from '../constants/config';
 
-interface CanvasStore {
+interface CanvasState {
   layers: Layer[];
   activeLayerId: string;
-  shapes: Shape[];
-  textItems: TextItem[];
-  undoStack: Layer[][];
-  redoStack: Layer[][];
   activeStrokePoints: Point[];
+  shapes: any[];
+  textItems: any[];
   activeShapeStart: { x: number; y: number } | null;
   activeShapeEnd: { x: number; y: number } | null;
+  undoStack: any[];
+  redoStack: any[];
   isDirty: boolean;
   isSaving: boolean;
-  initCanvas: () => void;
+
   beginStroke: (point: Point) => void;
   addPoint: (point: Point) => void;
-  endStroke: (data: Pick<Stroke, 'tool' | 'color' | 'size' | 'opacity'>) => void;
+  endStroke: (opts: { tool: string; color: string; size: number; opacity: number }) => void;
   cancelStroke: () => void;
-  beginShape: (point: Point) => void;
-  updateShape: (point: Point) => void;
-  endShape: (shape: Omit<Shape, 'id' | 'createdAt' | 'layerId'>) => void;
-  addTextItem: (item: Omit<TextItem, 'id'>) => void;
   undo: () => void;
   redo: () => void;
+  clearCanvas: () => void;
   saveCanvas: (pageId: string) => Promise<void>;
   loadCanvas: (pageId: string) => Promise<void>;
-  clearCanvas: () => void;
+  initCanvas: () => void;
+  beginShape: (point: { x: number; y: number }) => void;
+  updateShape: (point: { x: number; y: number }) => void;
+  endShape: (opts: any) => void;
+  addTextItem: (item: any) => void;
 }
 
-const makeLayer = (): Layer => ({
-  id: generateId(),
-  name: CANVAS.DEFAULT_LAYER_NAME,
-  visible: true, locked: false, opacity: 1, strokes: [],
-});
+const DEFAULT_LAYER: Layer = {
+  id: 'layer_001',
+  name: 'Layer 1',
+  visible: true,
+  locked: false,
+  opacity: 1,
+  strokes: [],
+};
 
-export const useCanvasStore = create<CanvasStore>((set, get) => ({
-  layers: [], activeLayerId: '', shapes: [], textItems: [],
-  undoStack: [], redoStack: [], activeStrokePoints: [],
-  activeShapeStart: null, activeShapeEnd: null,
-  isDirty: false, isSaving: false,
+export const useCanvasStore = create<CanvasState>((set, get) => ({
+  layers: [{ ...DEFAULT_LAYER }],
+  activeLayerId: 'layer_001',
+  activeStrokePoints: [],
+  shapes: [],
+  textItems: [],
+  activeShapeStart: null,
+  activeShapeEnd: null,
+  undoStack: [],
+  redoStack: [],
+  isDirty: false,
+  isSaving: false,
 
-  initCanvas: () => {
-    const layer = makeLayer();
-    set({ layers: [layer], activeLayerId: layer.id });
+  beginStroke: (point) => {
+    set({ activeStrokePoints: [point] });
   },
 
-  beginStroke: (point) => set({ activeStrokePoints: [point] }),
-  addPoint: (point) => set((s) => ({ activeStrokePoints: [...s.activeStrokePoints, point] })),
+  addPoint: (point) => {
+    set((s) => ({ activeStrokePoints: [...s.activeStrokePoints, point] }));
+  },
 
-  endStroke: (data) => {
-    const s = get();
-    const simplified = simplifyPoints(s.activeStrokePoints);
-    if (simplified.length < 2) { set({ activeStrokePoints: [] }); return; }
+  endStroke: ({ tool, color, size, opacity }) => {
+    const { activeStrokePoints, layers, activeLayerId, undoStack } = get();
+    if (activeStrokePoints.length < 2) {
+      set({ activeStrokePoints: [] });
+      return;
+    }
     const newStroke: Stroke = {
-      id: generateId(), points: simplified,
-      layerId: s.activeLayerId, createdAt: Date.now(), ...data,
+      id: generateId(),
+      points: [...activeStrokePoints],
+      tool: tool as any,
+      color, size, opacity,
+      layerId: activeLayerId,
+      createdAt: Date.now(),
     };
-    const snapshot = s.layers.map((l) => ({ ...l, strokes: [...l.strokes] }));
-    const cappedUndo = [...s.undoStack.slice(-(CANVAS.MAX_UNDO_STEPS - 1)), snapshot];
-    set((st) => ({
-      layers: st.layers.map((l) =>
-        l.id === st.activeLayerId ? { ...l, strokes: [...l.strokes, newStroke] } : l
-      ),
-      activeStrokePoints: [], undoStack: cappedUndo, redoStack: [], isDirty: true,
-    }));
+    const updatedLayers = layers.map((l) =>
+      l.id === activeLayerId ? { ...l, strokes: [...l.strokes, newStroke] } : l
+    );
+    set({
+      layers: updatedLayers,
+      activeStrokePoints: [],
+      undoStack: [...undoStack.slice(-49), { type: 'stroke', layerId: activeLayerId, strokeId: newStroke.id }],
+      redoStack: [],
+      isDirty: true,
+    });
   },
 
-  cancelStroke: () => set({ activeStrokePoints: [], activeShapeStart: null, activeShapeEnd: null }),
-  beginShape: (point) => set({ activeShapeStart: point, activeShapeEnd: point }),
-  updateShape: (point) => set({ activeShapeEnd: point }),
-
-  endShape: (shapeData) => {
-    const s = get();
-    if (!s.activeShapeStart || !s.activeShapeEnd) return;
-    const newShape: Shape = {
-      id: generateId(), createdAt: Date.now(),
-      layerId: s.activeLayerId, ...shapeData,
-    };
-    set((st) => ({ shapes: [...st.shapes, newShape], activeShapeStart: null, activeShapeEnd: null, isDirty: true }));
-  },
-
-  updateTextItem: (id, changes) => {
-    set((s) => ({
-      textItems: s.textItems.map((t) => t.id === id ? { ...t, ...changes } : t),
-    }));
-  },
-  deleteTextItem: (id) => {
-    set((s) => ({ textItems: s.textItems.filter((t) => t.id !== id) }));
-  },
-  addTextItem: (item) => {
-    const newItem: TextItem = { id: generateId(), ...item };
-    set((s) => ({ textItems: [...s.textItems, newItem], isDirty: true }));
+  // CRITICAL: Never throw, just reset
+  cancelStroke: () => {
+    set({ activeStrokePoints: [] });
   },
 
   undo: () => {
-    const { undoStack, layers } = get();
+    const { undoStack, layers, redoStack } = get();
     if (undoStack.length === 0) return;
-    const prev = undoStack[undoStack.length - 1];
-    set((s) => ({ redoStack: [...s.redoStack, layers], layers: prev, undoStack: undoStack.slice(0, -1), isDirty: true }));
+    const last = undoStack[undoStack.length - 1];
+    if (last.type === 'stroke') {
+      const updatedLayers = layers.map((l) =>
+        l.id === last.layerId
+          ? { ...l, strokes: l.strokes.filter((s) => s.id !== last.strokeId) }
+          : l
+      );
+      set({
+        layers: updatedLayers,
+        undoStack: undoStack.slice(0, -1),
+        redoStack: [...redoStack, last],
+        isDirty: true,
+      });
+    }
   },
 
   redo: () => {
-    const { redoStack, layers } = get();
+    const { redoStack, undoStack } = get();
     if (redoStack.length === 0) return;
-    const next = redoStack[redoStack.length - 1];
-    set((s) => ({ undoStack: [...s.undoStack, layers], layers: next, redoStack: redoStack.slice(0, -1), isDirty: true }));
+    set({ redoStack: redoStack.slice(0, -1), undoStack: [...undoStack, redoStack[redoStack.length - 1]] });
+  },
+
+  clearCanvas: () => {
+    set({
+      layers: [{ ...DEFAULT_LAYER, id: 'layer_001', strokes: [] }],
+      activeStrokePoints: [],
+      shapes: [],
+      textItems: [],
+      undoStack: [],
+      redoStack: [],
+      isDirty: true,
+    });
+  },
+
+  initCanvas: () => {
+    set({
+      layers: [{ ...DEFAULT_LAYER, id: 'layer_001', strokes: [] }],
+      activeLayerId: 'layer_001',
+      activeStrokePoints: [],
+      shapes: [],
+      textItems: [],
+      undoStack: [],
+      redoStack: [],
+      isDirty: false,
+    });
   },
 
   saveCanvas: async (pageId) => {
+    const { layers, shapes, textItems } = get();
     set({ isSaving: true });
     try {
-      const key = `${STORAGE.CANVAS_KEY}${pageId}`;
-      const { layers, shapes, textItems } = get();
-      await AsyncStorage.setItem(key, JSON.stringify({ layers, shapes, textItems }));
+      await AsyncStorage.setItem(`zyrox_canvas_${pageId}`, JSON.stringify({ layers, shapes, textItems }));
       set({ isDirty: false });
-    } catch (e) { console.error('[ZYROX] Save error:', e); }
-    finally { set({ isSaving: false }); }
+    } catch (e) {}
+    set({ isSaving: false });
   },
 
   loadCanvas: async (pageId) => {
     try {
-      const key = `${STORAGE.CANVAS_KEY}${pageId}`;
-      const raw = await AsyncStorage.getItem(key);
+      const raw = await AsyncStorage.getItem(`zyrox_canvas_${pageId}`);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        const layers = parsed.layers || parsed;
-        const shapes = parsed.shapes || [];
-        const textItems = parsed.textItems || [];
-        if (layers.length > 0) {
-          set({ layers, shapes, textItems, activeLayerId: layers[0].id });
-          return;
-        }
+        const { layers, shapes, textItems } = JSON.parse(raw);
+        set({ layers: layers || [{ ...DEFAULT_LAYER }], shapes: shapes || [], textItems: textItems || [], activeStrokePoints: [] });
       }
-    } catch (e) { console.error('[ZYROX] Load error:', e); }
-    get().initCanvas();
+    } catch (e) {}
   },
 
-  clearCanvas: () => {
-    const layer = makeLayer();
-    set({ layers: [layer], activeLayerId: layer.id, shapes: [], textItems: [], undoStack: [], redoStack: [], isDirty: false });
+  beginShape: (point) => {
+    set({ activeShapeStart: point, activeShapeEnd: point });
+  },
+
+  updateShape: (point) => {
+    set({ activeShapeEnd: point });
+  },
+
+  endShape: ({ type, startX, startY, endX, endY, color, size, opacity }) => {
+    const { shapes } = get();
+    const newShape = { id: generateId(), type, startX, startY, endX, endY, color, size, opacity };
+    set({ shapes: [...shapes, newShape], activeShapeStart: null, activeShapeEnd: null, isDirty: true });
+  },
+
+  addTextItem: (item) => {
+    const { textItems } = get();
+    set({ textItems: [...textItems, { ...item, id: generateId() }], isDirty: true });
   },
 }));
