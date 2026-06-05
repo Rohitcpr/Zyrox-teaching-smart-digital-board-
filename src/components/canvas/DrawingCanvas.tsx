@@ -1,5 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
-import { View, StyleSheet, PanResponder } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Svg from 'react-native-svg';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { useToolStore } from '../../store/useToolStore';
@@ -12,8 +13,6 @@ import { ActiveShape } from '../shapes/ActiveShape';
 import { TextRenderer } from '../text/TextRenderer';
 import { TextTool } from '../text/TextTool';
 import { SelectionMenu } from '../selection/SelectionMenu';
-import { usePalmRejection } from '../../hooks/usePalmRejection';
-import { useTwoFingerGesture } from '../../hooks/useTwoFingerGesture';
 import { useStrokeEraser } from '../../hooks/useStrokeEraser';
 
 interface Props {
@@ -47,200 +46,158 @@ export const DrawingCanvas: React.FC<Props> = React.memo(({ onTap, bgColor = '#0
   const { isSelecting, selectionBox, selectedItems, startSelection, updateSelection, endSelection, clearSelection } = useSelectionStore();
   const [textPos, setTextPos] = useState<{ x: number; y: number } | null>(null);
   const [showSelectionMenu, setShowSelectionMenu] = useState(false);
+  const { eraseStrokeAtPoint } = useStrokeEraser();
 
   const toolRef = useRef({ tool, color, size, opacity, activeShape, disabled });
   toolRef.current = { tool, color, size, opacity, activeShape, disabled };
 
-  // Use refs for all drawing state - NO re-renders during drawing
-  const isDrawingRef = useRef(false);
-  const strokeStartedRef = useRef(false);
-  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-  const lastTimeRef = useRef(0);
+  const strokeActiveRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
 
-  const { shouldReject, reset } = usePalmRejection();
-  const { onTouchStart, onTouchEnd } = useTwoFingerGesture();
-  const { eraseStrokeAtPoint } = useStrokeEraser();
+  const drawGesture = Gesture.Pan()
+    .runOnJS(true)
+    .minDistance(0)
+    .maxPointers(1)
+    .onBegin((e) => {
+      if (toolRef.current.disabled) return;
+      const { tool, color, size, opacity } = toolRef.current;
+      const x = e.x;
+      const y = e.y;
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !toolRef.current.disabled,
-      onMoveShouldSetPanResponder: () => !toolRef.current.disabled && isDrawingRef.current,
-      onPanResponderTerminationRequest: () => true,
+      strokeActiveRef.current = false;
+      lastPosRef.current = { x, y };
+      onTap?.();
+      setShowSelectionMenu(false);
 
-      onPanResponderGrant: (evt) => {
-        if (toolRef.current.disabled) return;
-        try {
-          if (evt.nativeEvent.touches.length > 1) {
-            isDrawingRef.current = false;
-            strokeStartedRef.current = false;
-            return;
-          }
-
-          onTouchStart(evt);
-          if (shouldReject(evt)) { isDrawingRef.current = false; return; }
-
-          const { locationX, locationY } = evt.nativeEvent;
-          const { tool } = toolRef.current;
-
-          onTap?.();
-          setShowSelectionMenu(false);
-
-          isDrawingRef.current = true;
-          strokeStartedRef.current = false;
-          lastPointRef.current = { x: locationX, y: locationY };
-          lastTimeRef.current = Date.now();
-
-          if (tool === 'select') {
-            clearSelection();
-            startSelection(locationX, locationY);
-          } else if (tool === 'text') {
-            setTextPos({ x: locationX, y: locationY });
-            isDrawingRef.current = false;
-          } else if (tool === 'stroke_eraser') {
-            eraseStrokeAtPoint({ x: locationX, y: locationY });
-          } else if (tool === 'shape') {
-            beginShape({ x: locationX, y: locationY });
-          } else {
-            beginStroke({ x: locationX, y: locationY, timestamp: Date.now() });
-            strokeStartedRef.current = true;
-          }
-        } catch(e) {
-          isDrawingRef.current = false;
-          strokeStartedRef.current = false;
-        }
-      },
-
-      onPanResponderMove: (evt) => {
-        if (toolRef.current.disabled) return;
-        if (!isDrawingRef.current) return;
-        if (evt.nativeEvent.touches.length > 1) {
-          isDrawingRef.current = false;
-          strokeStartedRef.current = false;
-          try { cancelStroke(); } catch(e) {}
-          return;
-        }
-
-        try {
-          const { locationX, locationY } = evt.nativeEvent;
-          const { tool } = toolRef.current;
-
-          // Strict distance filter
-          const last = lastPointRef.current;
-          if (last) {
-            const dx = locationX - last.x;
-            const dy = locationY - last.y;
-            const distSq = dx * dx + dy * dy;
-
-            // Minimum 3px for normal, 1px for eraser
-            const minDist = tool === 'stroke_eraser' ? 1 : 3;
-            if (distSq < minDist * minDist) return;
-
-            // Direction validation - ignore extreme jumps (> 200px)
-            if (distSq > 40000) {
-              // Too far - finger probably lifted and restarted
-              lastPointRef.current = { x: locationX, y: locationY };
-              return;
-            }
-          }
-
-          lastPointRef.current = { x: locationX, y: locationY };
-
-          if (tool === 'select') {
-            updateSelection(locationX, locationY);
-          } else if (tool === 'stroke_eraser') {
-            eraseStrokeAtPoint({ x: locationX, y: locationY });
-          } else if (tool === 'shape') {
-            updateShape({ x: locationX, y: locationY });
-          } else if (strokeStartedRef.current) {
-            addPoint({ x: locationX, y: locationY, timestamp: Date.now() });
-          }
-        } catch(e) {}
-      },
-
-      onPanResponderRelease: (evt) => {
-        const wasDrawing = isDrawingRef.current;
-        const wasStroke = strokeStartedRef.current;
-
-        isDrawingRef.current = false;
-        strokeStartedRef.current = false;
-        lastPointRef.current = null;
-
-        if (toolRef.current.disabled || !wasDrawing) return;
-
-        try {
-          const wasGesture = onTouchEnd(evt);
-          reset();
-          if (wasGesture) return;
-
-          const { tool, color, size, opacity, activeShape } = toolRef.current;
-
-          if (tool === 'select') {
-            endSelection();
-            setTimeout(() => setShowSelectionMenu(true), 100);
-            return;
-          }
-          if (tool === 'text' || tool === 'stroke_eraser') return;
-
-          if (tool === 'shape') {
-            const start = useCanvasStore.getState().activeShapeStart;
-            const end = useCanvasStore.getState().activeShapeEnd;
-            if (!start || !end) return;
-            endShape({ type: activeShape, startX: start.x, startY: start.y, endX: end.x, endY: end.y, color, size, opacity });
-          } else if (wasStroke) {
-            const points = useCanvasStore.getState().activeStrokePoints;
-            if (points.length < 2) { cancelStroke(); return; }
-            endStroke({ tool, color, size, opacity });
-          }
-        } catch(e) {
-          try { cancelStroke(); } catch(e2) {}
-        }
-      },
-
-      onPanResponderTerminate: () => {
-        isDrawingRef.current = false;
-        strokeStartedRef.current = false;
-        lastPointRef.current = null;
-        try { reset(); cancelStroke(); } catch(e) {}
-      },
+      if (tool === 'text') {
+        setTextPos({ x, y });
+      } else if (tool === 'select') {
+        clearSelection();
+        startSelection(x, y);
+      } else if (tool === 'stroke_eraser') {
+        eraseStrokeAtPoint({ x, y });
+      } else if (tool === 'shape') {
+        beginShape({ x, y });
+      } else {
+        beginStroke({ x, y, timestamp: Date.now() });
+        strokeActiveRef.current = true;
+      }
     })
-  ).current;
+    .onUpdate((e) => {
+      if (toolRef.current.disabled) return;
+      const { tool } = toolRef.current;
+      const x = e.x;
+      const y = e.y;
+
+      // Distance check
+      const dx = x - lastPosRef.current.x;
+      const dy = y - lastPosRef.current.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < 4 && tool !== 'stroke_eraser') return;
+
+      // Jump filter - ignore > 150px jumps
+      if (distSq > 22500) {
+        lastPosRef.current = { x, y };
+        return;
+      }
+
+      lastPosRef.current = { x, y };
+
+      if (tool === 'select') {
+        updateSelection(x, y);
+      } else if (tool === 'stroke_eraser') {
+        eraseStrokeAtPoint({ x, y });
+      } else if (tool === 'shape') {
+        updateShape({ x, y });
+      } else if (strokeActiveRef.current) {
+        addPoint({ x, y, timestamp: Date.now() });
+      }
+    })
+    .onEnd(() => {
+      if (toolRef.current.disabled) return;
+      const { tool, color, size, opacity, activeShape } = toolRef.current;
+      const wasActive = strokeActiveRef.current;
+      strokeActiveRef.current = false;
+
+      if (tool === 'select') {
+        endSelection();
+        setTimeout(() => setShowSelectionMenu(true), 100);
+        return;
+      }
+      if (tool === 'text' || tool === 'stroke_eraser') return;
+
+      if (tool === 'shape') {
+        const start = useCanvasStore.getState().activeShapeStart;
+        const end = useCanvasStore.getState().activeShapeEnd;
+        if (!start || !end) return;
+        endShape({ type: activeShape, startX: start.x, startY: start.y, endX: end.x, endY: end.y, color, size, opacity });
+        return;
+      }
+
+      if (wasActive) {
+        const points = useCanvasStore.getState().activeStrokePoints;
+        if (points.length < 2) { cancelStroke(); return; }
+        endStroke({ tool, color, size, opacity });
+      }
+    })
+    .onFinalize(() => {
+      // Always reset on any end
+      if (strokeActiveRef.current) {
+        strokeActiveRef.current = false;
+        try { cancelStroke(); } catch(e) {}
+      }
+    });
 
   const allStrokes = useMemo(
     () => layers.filter((l) => l.visible).flatMap((l) => l.strokes),
     [layers]
   );
 
+  if (disabled) {
+    return (
+      <View style={[styles.canvas, { backgroundColor: bgColor }]}>
+        <Svg style={StyleSheet.absoluteFill}>
+          <ShapeRenderer shapes={shapes} />
+          <TextRenderer items={textItems} />
+          <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
+        </Svg>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.canvas, { backgroundColor: bgColor }]} {...panResponder.panHandlers}>
-      <Svg style={StyleSheet.absoluteFill}>
-        <ShapeRenderer shapes={shapes} />
-        <TextRenderer items={textItems} />
-        <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
-        <ActiveStroke
-          points={activeStrokePoints}
-          color={color} size={size} opacity={opacity}
-          tool={tool} eraserColor={bgColor}
-        />
-        {tool === 'shape' && activeShapeStart && activeShapeEnd && (
-          <ActiveShape type={activeShape}
-            startX={activeShapeStart.x} startY={activeShapeStart.y}
-            endX={activeShapeEnd.x} endY={activeShapeEnd.y}
-            color={color} size={size} opacity={opacity} />
+    <GestureDetector gesture={drawGesture}>
+      <View style={[styles.canvas, { backgroundColor: bgColor }]}>
+        <Svg style={StyleSheet.absoluteFill}>
+          <ShapeRenderer shapes={shapes} />
+          <TextRenderer items={textItems} />
+          <StrokeRenderer strokes={allStrokes} eraserColor={bgColor} />
+          <ActiveStroke
+            points={activeStrokePoints}
+            color={color} size={size} opacity={opacity}
+            tool={tool} eraserColor={bgColor}
+          />
+          {tool === 'shape' && activeShapeStart && activeShapeEnd && (
+            <ActiveShape type={activeShape}
+              startX={activeShapeStart.x} startY={activeShapeStart.y}
+              endX={activeShapeEnd.x} endY={activeShapeEnd.y}
+              color={color} size={size} opacity={opacity} />
+          )}
+          <SelectionOverlay box={selectionBox} isSelecting={isSelecting} />
+        </Svg>
+
+        {showSelectionMenu && selectionBox && selectedItems.strokeIds.length > 0 && (
+          <SelectionMenu box={selectionBox} onClose={() => { setShowSelectionMenu(false); clearSelection(); }} />
         )}
-        <SelectionOverlay box={selectionBox} isSelecting={isSelecting} />
-      </Svg>
 
-      {showSelectionMenu && selectionBox && selectedItems.strokeIds.length > 0 && (
-        <SelectionMenu box={selectionBox} onClose={() => { setShowSelectionMenu(false); clearSelection(); }} />
-      )}
-
-      {textPos && (
-        <TextTool x={textPos.x} y={textPos.y}
-          onDone={(text, x, y) => { addTextItem({ text, x, y, color, fontSize: Math.max(size * 4, 16), opacity }); setTextPos(null); }}
-          onCancel={() => setTextPos(null)}
-        />
-      )}
-    </View>
+        {textPos && (
+          <TextTool x={textPos.x} y={textPos.y}
+            onDone={(text, x, y) => { addTextItem({ text, x, y, color, fontSize: Math.max(size * 4, 16), opacity }); setTextPos(null); }}
+            onCancel={() => setTextPos(null)}
+          />
+        )}
+      </View>
+    </GestureDetector>
   );
 });
 
